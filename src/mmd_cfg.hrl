@@ -1,0 +1,1 @@
+-record(mmd_cfg,{ackSub=false}).

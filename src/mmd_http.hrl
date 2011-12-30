@@ -1,0 +1,2 @@
+-include("mmd_cfg.hrl").
+-record(htcfg,{port,path,proxy,trace=false,mmdCfg=#mmd_cfg{}}).

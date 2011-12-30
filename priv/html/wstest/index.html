@@ -1,0 +1,273 @@
+
+
+<html> 
+    <head> 
+    <title>Web Socket Test</title> 
+    <script type="text/javascript" src="/wsurl.js"></script> 
+    <script type="text/javascript"> 
+      var socket = null;
+
+      function initSock() {
+        if (socket != null) {
+          addStatus("Socket already open")
+        }
+        else if (window.WebSocket) {
+          socket = new WebSocket(mmdUrl);
+          socket.onmessage = function(event) { addStatus("Received: "+event.data); };
+          socket.onopen = function(event) { addStatus("Web Socket opened!"); }; 
+          socket.onclose = function(event) { socket = null; addStatus("Web Socket closed."); };
+        } else {
+          addStatus("Your browser does not support Web Socket.");
+        }
+      }
+
+      function closeSock() {
+        if (socket == null) {
+          addStatus("Socket not open");
+        }
+        else{
+          socket.close();
+          socket = null;
+        }
+      }
+
+      function send(message) {
+        if (!window.WebSocket) { return; }
+        else if (!socket) { addStatus("Socket not open"); }
+        else if (socket.readyState == WebSocket.OPEN) {
+          var msg = JSON.stringify(message);
+          addStatus("Sending: "+msg)
+          socket.send(msg);
+        } else {
+          addStatus("The socket is not open.");
+        }
+      }
+
+      function addStatus(data) {
+        var date = new Date();
+        var res = _id('status');
+        res.innerHTML = date + ":" + data + "<br/>" + res.innerHTML;
+      }
+
+      function resetStatus() {
+        var date = new Date();
+        var res = _id('status');
+        res.innerHTML = date + ": Reset output, connection is: "+ (socket ? "Opened" : "Closed");
+      }
+      function uuid() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+          return v.toString(16);
+        });
+      }
+      function genId() {
+        _id("channel").value = uuid();
+      }
+
+      function sendCall() {
+        createChan("call")
+        genId()
+      }
+      function sendSub() {
+        createChan("sub")
+      }
+
+      function createChan(action) {
+        var m = new Object();
+        m.svc =    _id("service").value;
+        var auth = _id("authtoken").value;
+        if (auth) { m.auth = auth; }
+        m.body = objectify("body");
+        var chan = _id("channel").value;
+        m[action] = chan;
+        _id("cm_channel").value = chan;
+        _id("cc_channel").value = chan;
+        send(m)
+      }
+
+      function sendClose() {
+        send({close:_id("cc_channel").value, body:objectify("cc_body")})
+      }
+
+      function sendMsg() {
+        send({msg:_id("cm_channel").value, body:objectify("cm_body")})
+      }
+
+      function setupScenario(svc,createBody,msgBody,closeBody) {
+        _id("service").value = svc;
+        _id("body").value = createBody;
+        _id("cm_body").value = msgBody;
+        _id("cc_body").value = closeBody;
+      }
+      function setupConfigTest() {
+       var body = {
+          action:"get",
+          key:"SecurityRightValueList[1]",
+          protection:"global",
+          application:"NGUsers"
+        }
+        setupScenario("configurationservice",JSON.stringify(body),'','');
+      }
+
+      function init() {
+        initSock();
+        genId();
+      }
+
+      function objectify(id) {
+          var objText = _id(id).value
+          try {
+            return eval("("+objText+")");
+          }
+          catch (err) {
+            addStatus("Failed to parse body, sending as text: "+err)
+            return objText
+          }
+      }
+
+      function _id(i) {
+        return document.getElementById(i);
+      }
+
+    </script>
+    <style type="text/css">
+        *{
+            font-family:Arial;
+            font-size:12px;
+            font-weight:bold;
+        }
+        BODY
+        {
+            background-color:Black;
+        }
+        TH{
+            background:-webkit-gradient(linear, left top, left bottom, color-stop(0, #777), color-stop(0.41, #222));
+            color:#fff;
+        }
+        .header
+        {
+            background:-webkit-gradient(linear, left top, left bottom, color-stop(0, #fff), color-stop(1, #a0c3f2));
+            color:#333;
+            padding:3px 3px 3px 6px;
+        }
+        TABLE
+        {
+            background:-webkit-gradient(linear, left top, left bottom, color-stop(0, #ddd), color-stop(1, #bbb));
+            color:#fff;
+            border:1px solid #eee;
+            -webkit-border-radius: 3px;
+        }
+        TD
+        {
+            padding:3px 6px;
+        }
+        TEXTAREA, INPUT[type=text]
+        {
+            width:100%;
+            font-weight:normal;
+            -webkit-border-radius: 3px;
+            border:1px solid #000;
+            resize: none;
+        }
+        INPUT[type=button]
+        {
+            font-weight:normal;
+            -webkit-border-radius: 3px;
+            border:1px solid #000;
+            cursor:pointer;
+            background:-webkit-gradient(linear, left top, left bottom, color-stop(0, #fff), color-stop(0.41, #f3efd7));
+        }
+        SPAN
+        {
+            position:relative;
+            top:4px;
+            color:#333;
+        }
+        .d
+        {
+            border-left:1px dashed #888;
+        }
+        #status
+        {
+            font-weight:normal;
+            -webkit-border-radius: 3px;
+            border:1px solid #000;
+            padding:6px;
+            margin-top:10px;
+            background-color:#fff;
+            color:#000;
+            height:300px;
+            width:980px;
+            overflow:auto;
+        }
+    </style>
+    </head> 
+    <body onload="init()"> 
+        <form onsubmit="return false;">
+        <table border="0" cellpadding="3" cellspacing="0" style="width:100%">
+            <tr>
+                <td valign="top" colspan="3" class="header">
+                    Connection: <input type="button" value="Open" onclick="initSock()"/> <input type="button" value="Close" onclick="closeSock()"/>
+                </td>
+                <td valign="top" colspan="3" class="header" align="right">
+                    <input type="button" value="Reset Output" onclick="resetStatus()"/> 
+
+                    <input type="button" value="Setup login" onclick="setupScenario('loginservice','{&quot;action&quot;:&quot;authenticate&quot;,&quot;user&quot;:&quot;nextgentest&quot;,&quot;clear-pass&quot;:&quot;Program1&quot;}','','')"/> 
+                    <input type="button" value="Setup config" onclick="setupConfigTest()"/> 
+                    <input type="button" value="Setup echo" onclick="setupScenario('echo','\'echo create\'','\'echo msg\'','\'echo close\'')"/> 
+                    <input type="button" value="Setup echo2" onclick="setupScenario('echo2','\'echo2 create\'','\'echo2 msg\'','\'echo2 close\'')"/> 
+                </td>
+            </tr>
+            <th colspan="2">Create Channel</th> 
+            <th colspan="2" class="d">Channel Message</th> 
+            <th colspan="2" class="d">Channel Close</th> 
+            <tr> 
+                <td valign="top"><span>Service: </span></td> 
+                <td valign="top" style="width:33%"><input type="text" id="service" value="echo2"/></td>
+                <td valign="top" class="d">&#160;</td>
+                <td valign="top" style="width:33%"></td>
+                <td valign="top" class="d">&#160;</td>
+                <td valign="top" style="width:33%"></td>
+            </tr>
+            <tr> 
+                <td valign="top"><span>Token: </span></td> 
+                <td valign="top"><input type="text" id="authtoken" value=""/></td>
+                <td valign="top" class="d">&#160;</td>
+                <td valign="top"></td>
+                <td valign="top" class="d">&#160;</td>
+                <td valign="top"></td>
+            </tr>
+            <tr> 
+                <td valign="top"><input type="button" value="Channel" onclick="genId()"/></td> 
+                <td valign="top"><input type="text" id="channel" value="00000000-0000-0000-0000-000000000001"/></td> 
+                <td valign="top" class="d"><span>Channel: </span></td> 
+                <td valign="top"><input type="text" id="cm_channel" value=""/></td> 
+                <td valign="top" class="d"><span>Channel: </span></td> 
+                <td valign="top"><input type="text" id="cc_channel" value=""/></td>
+            </tr>
+            <tr>
+                <td valign="top"><span>Body: </span></td> 
+                <td valign="top"><textarea rows="5" id="body"></textarea></td>
+                <td valign="top" class="d"><span>Body: </span></td> 
+                <td valign="top"><textarea rows="5" id="cm_body"></textarea></td>
+                <td valign="top" class="d"><span>Body: </span></td>
+                <td valign="top"><textarea rows="5" id="cc_body"></textarea></td>
+            </tr>
+            <tr>
+                <td valign="top" />
+                <td valign="top">
+                    <input type="button" value="Subscribe" onclick="sendSub()"/>
+                    <input type="button" value="Call" onclick="sendCall()"/>
+                </td>
+                <td valign="top" class="d">&#160;</td>
+                <td valign="top"><input type="button" value="Send Message" onclick="sendMsg()"/></td>
+                <td valign="top" class="d">&#160;</td>
+                <td valign="top"><input type="button" value="Send Close" onclick="sendClose()"/></td>
+            </tr>
+            <tr>
+                <td colspan="6"><div id="status"></div></td>
+            </tr>
+        </table>
+        </form> 
+    </body> 
+</html> 

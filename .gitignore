@@ -1,0 +1,8 @@
+deps
+*.dump
+ebin
+logs
+*~
+gproc*@*
+.eunit/
+doc/
