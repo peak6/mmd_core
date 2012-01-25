@@ -45,8 +45,14 @@ avg15() -> cpu_sup:avg15().
 %%%===================================================================
 
 init([]) ->
-    proc_lib:spawn_link(fun() -> updateLoop(p6props:getApp('cpu_load.updateInterval',1000)) end),
-    {ok, genLoad()}.
+    case os:type() of
+	{win32,nt}->
+	    {ok,99};
+	_-> 
+	    application:start(os_mon),
+	    proc_lib:spawn_link(fun() -> updateLoop(p6props:getApp('cpu_load.updateInterval',1000)) end),
+	    {ok, genLoad()}
+    end.
 
 handle_call(util,_From,Load) -> {reply,Load,Load};
 
