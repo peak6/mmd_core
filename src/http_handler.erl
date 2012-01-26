@@ -19,11 +19,8 @@
 -include("mmd.hrl").
 -include("mmd_http.hrl").
 
-handleHttp({htcfg,Port,Path},Req) -> 
-    handleHttp(#htcfg{port=Port,path=Path,proxy="http://oslchi6ddev1"},Req);
-
 handleHttp(Cfg,Req) ->
-    OrigPath = Req:get(uri_unquoted),
+    OrigPath =  Req:get(uri_unquoted),
     case string:to_lower(OrigPath) of
         "/wsurl" -> Req:ok([{"Content-Type", "text/plain"}],getWSUrl(Cfg));
         "/wsurl.js" -> Req:ok([{"Content-Type","text/javascript"}],"var mmdUrl = \"~s\"; var p6MMDVars = ~s",[getWSUrl(Cfg),mkvars(Cfg)]);
@@ -55,8 +52,9 @@ addArgs(Req,Path) ->
         Args -> Path++"?"++Args
     end.
 
-doProxy(Req,Url) ->
-    case httpc:request(addArgs(Req,Url)) of
+doProxy(Req,#htcfg{proxy=undefined},_Url) -> Req:respond(404,[],"Not Found: "++Req:get(uri_unquoted));
+doProxy(Req,#htcfg{proxy=Proxy},Url) ->
+    case httpc:request(addArgs(Req,Proxy++Url)) of
         {ok,{{_,200,_},Headers,Body}} -> Req:ok(Headers,Body);
         {ok,{R={_,RC,_},H,B}} -> ?linfo("Failed proxy call to: ~p, ~p",[Url,R]),
                                  Req:respond(RC,H,B)
@@ -88,7 +86,7 @@ sendFile(Cfg,Req,File) ->
         {error,enoent} -> 
             case p6file:pathFindType(Cfg#htcfg.path,File++"/index.html",file) of
                 {file, F} -> misultin_req:file(F,Req);
-                {error,enoent} -> doProxy(Req,Cfg#htcfg.proxy++File)
+                {error,enoent} -> doProxy(Req,Cfg,File)
             end
     end.
 

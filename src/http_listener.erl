@@ -12,7 +12,7 @@
 %% See the License for the specific language governing permissions and
 %% limitations under the License.
 -module(http_listener).
--include_lib("p6core/include/logger.hrl").
+-include_lib("p6core/include/p6core.hrl").
 -include("mmd_http.hrl").
 -export([start_link/1]).
 
@@ -34,7 +34,7 @@ start_link(Port) ->
                        
     Proxy = 
         case application:get_env(http_proxy_url) of 
-            undefined -> "http://pslchi6drnd8:9998";
+            undefined -> undefined;
             {ok,Val} -> p6str:mkstr(Val)
         end,
     Cfg = #htcfg{port=Port,path=Path,proxy=Proxy},
@@ -42,7 +42,7 @@ start_link(Port) ->
     MOpts = [{loop, fun(Req) -> http_handler:handleHttp(Cfg,Req) end},
              {ws_loop, fun(Req) -> http_handler:handleWs(Req,Cfg) end},
              {port,Port}],
-    ?linfo("Starting http server on port: ~p",[Port]),
+    ?linfo("Starting http server on port: ~p with config: ~p",[Port,?DUMP_REC(htcfg,Cfg)]),
     misultin:start_link(MOpts).
 
 
