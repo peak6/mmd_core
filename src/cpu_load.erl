@@ -46,12 +46,13 @@ avg15() -> cpu_sup:avg15().
 
 init([]) ->
     case os:type() of
-	{win32,nt}->
-	    {ok,99};
-	_-> 
+	{unix,linux}-> 
 	    application:start(os_mon),
 	    proc_lib:spawn_link(fun() -> updateLoop(p6props:getApp('cpu_load.updateInterval',1000)) end),
-	    {ok, genLoad()}
+	    {ok, genLoad()};
+	Unknown->
+	    ?lwarn("Unsupported os '~p', assuming 99% load",[Unknown]),
+	    {ok,99}
     end.
 
 handle_call(util,_From,Load) -> {reply,Load,Load};
