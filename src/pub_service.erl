@@ -67,12 +67,7 @@ handle_call({mmd, From, Msg}, _From, State=#state{chans=Chans, sub=Sub}) ->
 	    {NewChans, #channel_message{body=Body}} ->
 		sub_service:pub(Sub, Body),
 		NewChans;
-	    {NewChans, #channel_close{body = <<?NULL>>}} ->
-		NewChans;
-	    {NewChans, #channel_close{body = ?error(_, _)}} ->
-		NewChans;
-	    {NewChans, #channel_close{body=Body}} ->
-		sub_service:pub(Sub, Body),
+	    {NewChans, #channel_close{}} ->
 		NewChans
 	end,
     {reply, ok, State#state{chans=NewChans3}};
