@@ -15,36 +15,76 @@
 
 -define(WSLOOP(WS,Cfg,SESSION),?MODULE:wsLoop(WS,Cfg,SESSION)).
 -export([handleHttp/2, handleWs/2,wsLoop/3]).
+
 -include_lib("p6core/include/p6core.hrl").
 -include("mmd.hrl").
 -include("mmd_http.hrl").
 
 handleHttp(Cfg,Req) ->
     OrigPath =  Req:get(uri_unquoted),
+    ?ldebug("PATH: ~p",[OrigPath]),
     case string:to_lower(OrigPath) of
-        "/wsurl" -> Req:ok([{"Content-Type", "text/plain"}],getWSUrl(Cfg));
-        "/wsurl.js" -> Req:ok([{"Content-Type","text/javascript"}],"var mmdUrl = \"~s\"; var p6MMDVars = ~s",[getWSUrl(Cfg),mkvars(Cfg)]);
-        "/mmdvars.js" -> Req:ok([{"Content-Type","text/javascript"}],"var p6MMDVars = ~s;",[mkvars(Cfg)]);
+	"/_p6init.js" -> Req:ok([{"Content-Type","text/javascript"}],[<<"var _p6MMDVars = ">>,mkInit(Cfg)]);
+        "/_call/"++Svc -> doMMDCall(Req,p6str:mkatom(Svc));
         "/call/"++Svc -> doMMDCall(Req,p6str:mkatom(Svc));
+        "/wsurl" -> Req:ok([{"Content-Type", "text/plain"}],getWSUrl(Cfg));
+        "/wsurl.js" -> Req:ok([{"Content-Type","text/javascript"}],[<<"var p6MMDVars = ">>,mkInit(Cfg)]);
         _ -> checkAndSendFile(Cfg,Req,OrigPath)
     end.
 
-mkvars(Cfg) ->
-    Cur = 
-        case p6file:pathFindType(Cfg#htcfg.path,"current",dir) of
-            {error,enoent} -> undefined;
-            {dir,Dir} -> p6str:mkbin(okget:ok(file:read_link(Dir)))
-        end,
+%% Returns content of a file or an empty binary, used for optional includes from filesystem
+getContent(Path) ->
+    okget:getOrElse(file:read_file(Path),<<"">>).
 
-    okget:ok(json_encode:encode(?map([{<<"websocketURL">>,p6str:mkbin(getWSUrl(Cfg))},
-                             {<<"pathPrefix">>,Cur},
-                             {<<"environment">>,p6init:getEnv()}
-                            ]))).
+mkInit(Cfg=#htcfg{root=Root}) ->
+    [
+     <<"{\n \"websocketURL\": \"">>,getWSUrl(Cfg),
+     <<"\",\n \"environment\": \"">>,p6str:mkbin(p6init:getEnv()),
+     <<"\",\n \"components\": {">>, genComponents(Cfg),
+     <<" }\n};\n">>,getContent(Root++"/p6init.js")
+    ].
 
+getObj(Base) ->
+    FileName = filename:join(Base,"component.json"),
+    case file:read_file(FileName) of
+	{ok,Bin} -> {FileName,Bin};
+	_ -> undefined
+    end.
+
+
+%% Iterate webroot files looking for symlinks and generate js objects that represent those links
+genComponents(#htcfg{root=Root}) ->
+    Comps = 
+	lists:foldl( %% Each file
+	  fun(Entry,Objs) ->
+		  FullName = filename:join(Root,Entry),
+		  case file:read_link(filename:join(Root,Entry)) of 
+		      {ok,OrigPath} -> %% Is symlink
+			  Path = ensureTrailingSlash(OrigPath),
+			  Ent = 
+			      case getObj(FullName) of %% check for component.json
+				  undefined -> [<<"\n  \"">>,Entry,<<"\": {\"path\": \"/">>,Path,<<"\"}">>];
+				  {ObjFile,Bin} -> [<<"\n  \"">>,
+						     Entry,<<"\": {\"path\": \"/">>,Path,
+						     <<"\", \"obj\":\n//FILE: ">>,ObjFile,<<"\n">>,
+						     Bin,<<"\n//END OF: ">>,ObjFile,<<"\n }">>]
+			      end,
+			  case Objs of
+			      [] -> [Ent];
+			      _ -> [Ent,<<",">>|Objs]
+			  end;
+		      _Ignore -> Objs
+		  end
+	  end,
+	  [],
+	  okget:ok(file:list_dir(Root))
+	 ),
+    lists:reverse(Comps).
+
+    
 handleWs(Ws,Cfg) ->
     con_tracker:registerConnection(self(),websocket,p6str:ip_port_to_str(okget:ok(Ws:get(peer_addr)),Ws:get(peer_port)),Ws:get(socket)),
     ?WSLOOP(Ws,Cfg,channel_mgr:new()).
-
 
 addArgs(Req,Path) ->
     case Req:get(args) of
@@ -52,7 +92,9 @@ addArgs(Req,Path) ->
         Args -> Path++"?"++Args
     end.
 
-doProxy(Req,#htcfg{proxy=undefined},_Url) -> Req:respond(404,[],"Not Found: "++Req:get(uri_unquoted));
+doProxy(Req,#htcfg{proxy=undefined},Url) ->
+    ?lwarn("Missing requested file: ~p",[Url]),
+    Req:respond(404,[],"Not Found: "++Req:get(uri_unquoted));
 doProxy(Req,#htcfg{proxy=Proxy},Url) ->
     case httpc:request(addArgs(Req,Proxy++Url)) of
         {ok,{{_,200,_},Headers,Body}} -> Req:ok(Headers,Body);
@@ -68,26 +110,69 @@ checkAndSendFile(Cfg,Req,File) ->
 
 notFound(Req,Path) -> Req:respond(404,[],"Not Found: "++Path).
 
+redirect(Req,To) ->
+    RedirWithArgs = addArgs(Req,To),
+    ?ldebug("Redirecting '~s' -> '~s'",[Req:get(uri_unquoted),RedirWithArgs]),
+    Req:respond(307,[{"Location",RedirWithArgs}],"Redirect: "++RedirWithArgs).
+
+ensureTrailingSlash(Path) ->
+    case lists:reverse(Path) of
+	[$/|_Rem] -> Path;
+	Reversed -> lists:reverse([$/|Reversed])
+    end.
+
+shouldRedirect(Cfg,[$/|Rest]) -> shouldRedirect(Cfg,Rest);
+shouldRedirect(#htcfg{root=Root},Path) ->
+    case filename:split(Path) of
+	[] -> {false,"/"};
+	[Base|Rest] -> shouldRedirect(Root,Base,false,Rest)
+    end.
+
+shouldRedirect(Root,Base,Redirect,Rest) ->
+    FullPath = filename:join(Root,Base),
+    case file:read_link(FullPath) of
+	{ok,Base} -> {false,filename:join([$/|Base],filename:join(Rest))}; %% self link should not redirect
+	{ok,Link} ->
+	    shouldRedirect(Root,Link,true,Rest);
+	{error,_} -> %% einval / enoent both will redirect
+	    case Rest of
+		[] -> {Redirect,[$/|Base]};
+		_NonEmpty -> {Redirect,filename:join([$/|Base],filename:join(Rest))}
+	    end
+    end.
+    
+endsWithSlash(Path) ->
+    case lists:last(Path) of
+	$/ -> true;
+	_ -> false
+    end.
+
 sendFile(_Cfg,Req,"/favicon.ico") -> notFound(Req,"/favicon.ico");
 
-sendFile(Cfg,Req,File="/current/"++Rest) ->
-    case p6file:pathFindType(Cfg#htcfg.path,"current",dir) of
-        {error,enoent} -> notFound(Req,File);
-        {dir,Dir} -> {ok,NewPath} = file:read_link(Dir),
-                     Redir = "/"++string:strip(NewPath++"/"++Rest,left,$/),
-                     RedirWithArgs = addArgs(Req,Redir),
-                     ?ldebug("Redirecting: ~p -> ~p",[File,Redir]),
-                     Req:respond(307,[{"Location",RedirWithArgs}],"Redirect: "++RedirWithArgs)
-    end;
-
-sendFile(Cfg,Req,File) ->
-    case p6file:pathFindType(Cfg#htcfg.path,File,file) of
-        {file,F} -> misultin_req:file(F,Req);
-        {error,enoent} -> 
-            case p6file:pathFindType(Cfg#htcfg.path,File++"/index.html",file) of
-                {file, F} -> misultin_req:file(F,Req);
-                {error,enoent} -> doProxy(Req,Cfg,File)
-            end
+sendFile(Cfg=#htcfg{root=Root},Req,OrigFile) ->
+    case shouldRedirect(Cfg,OrigFile) of
+	{true,To} ->
+	    redirect(Req,To);
+	{false,File} ->
+	    FullPath = Root++File,
+	    case p6file:fileType(FullPath) of
+		{error,enoent} -> doProxy(Req,Cfg,File);
+		{error,eloop} -> ?lerr("Detected link to self: ~p",[FullPath]),
+				 notFound(Req,OrigFile);
+		file -> misultin_req:file(FullPath,Req);
+		dir ->
+		    case endsWithSlash(OrigFile) of
+			false -> redirect(Req,ensureTrailingSlash(OrigFile));
+			true ->
+			    Index = filename:join(FullPath,"index.html"),
+			    case filelib:is_regular(Index) of
+				true ->
+				    misultin_req:file(Index,Req);
+				false ->
+				    notFound(Req,OrigFile)
+			    end
+		    end
+	    end
     end.
 
 mkCreateChannel(Svc,Props) ->

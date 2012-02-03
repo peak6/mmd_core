@@ -17,27 +17,18 @@
 -export([start_link/1]).
 
 start_link(Port) ->
-    Path =
-        case application:get_env(http_docroot) of
-            {ok,P=[X|_]} when is_list(X) -> P;
-            {ok,P} when is_list(P) -> [P];
-            undefined -> p6init:getPaths("priv/html")
-        end,
-    lists:foreach(fun(P) ->
-                          case filelib:is_dir(P) of
-                              true -> ok;
-                              false -> ?lerr("Path ~s is not a valid path",[P]),
-                                       exit({bad_path,P})
-                          end
-                  end,
-                  Path),
-                       
+    Root =
+	case application:get_env(http_docroot) of
+	    {ok,R} when is_list(R) -> R;
+	    undefined -> os:getenv("HOME") ++ "/ngweb"
+	end,
+    
     Proxy = 
         case application:get_env(http_proxy_url) of 
             undefined -> undefined;
             {ok,Val} -> p6str:mkstr(Val)
         end,
-    Cfg = #htcfg{port=Port,path=Path,proxy=Proxy},
+    Cfg = #htcfg{port=Port,root=Root,proxy=Proxy},
 
     MOpts = [{loop, fun(Req) -> http_handler:handleHttp(Cfg,Req) end},
              {ws_loop, fun(Req) -> http_handler:handleWs(Req,Cfg) end},

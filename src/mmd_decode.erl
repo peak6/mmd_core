@@ -35,7 +35,6 @@ decodeFull(Thing) ->
     end.
 
 decode_obj(<<?CHANNEL_CREATE,Chan:16/binary,Type:1/binary,SvcSize:8/unsigned-integer,Svc:SvcSize/binary,Timeout:16/signed-integer,AT:16/binary,Body/binary>>) ->
-    ?ldebug("Decoding fast channel create: ~p",[Timeout]),
     #channel_create{service=Svc,
                     type=channel_type(Type),
                     timeout=if Timeout < 0 -> Timeout * -1; true -> Timeout*1000 end,
