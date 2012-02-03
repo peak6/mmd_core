@@ -20,7 +20,7 @@ start_link(Port) ->
     Root =
 	case application:get_env(http_docroot) of
 	    {ok,R} when is_list(R) -> R;
-	    undefined -> os:getenv("HOME") ++ "/ngweb"
+	    undefined -> os:getenv("HOME") ++ "/webroot"
 	end,
     
     Proxy = 
