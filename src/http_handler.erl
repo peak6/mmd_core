@@ -19,26 +19,38 @@
 -include_lib("p6core/include/p6core.hrl").
 -include("mmd.hrl").
 -include("mmd_http.hrl").
+-include_lib("kernel/include/inet.hrl").
 
 handleHttp(Cfg,Req) ->
     OrigPath =  Req:get(uri_unquoted),
-    ?ldebug("PATH: ~p",[OrigPath]),
     case string:to_lower(OrigPath) of
-	"/_p6init.js" -> Req:ok([{"Content-Type","text/javascript"}],[<<"var _p6MMDVars = ">>,mkInit(Cfg)]);
+	"/_hostname" -> Req:ok([{"Content-Type", "text/plain"}],p6str:mkbin(getHostName(Req)));
+	"/_p6init.js" -> Req:ok([{"Content-Type","text/javascript"}],[<<"var _p6MMDVars = ">>,mkInit(Cfg,Req)]);
         "/_call/"++Svc -> doMMDCall(Req,p6str:mkatom(Svc));
         "/call/"++Svc -> doMMDCall(Req,p6str:mkatom(Svc));
         "/wsurl" -> Req:ok([{"Content-Type", "text/plain"}],getWSUrl(Cfg));
-        "/wsurl.js" -> Req:ok([{"Content-Type","text/javascript"}],[<<"var p6MMDVars = ">>,mkInit(Cfg)]);
+        "/wsurl.js" -> Req:ok([{"Content-Type","text/javascript"}],[<<"var p6MMDVars = ">>,mkInit(Cfg,Req)]);
         _ -> checkAndSendFile(Cfg,Req,OrigPath)
+    end.
+
+getHostName(Req) ->
+    IP = okget:ok(Req:get(peer_addr)),
+    case inet:gethostbyaddr(IP) of
+	{ok,#hostent{h_name=undefined}} -> ?lwarn("Failed to resolve name for: ~p",[IP]),
+					   p6str:ip_to_str(IP);
+	{ok,#hostent{h_name=Name}} -> Name;
+	Other -> ?lwarn("Failed to resolve hostname for: ~p, result: ~p",[IP,Other]),
+		 p6str:ip_to_str(IP)
     end.
 
 %% Returns content of a file or an empty binary, used for optional includes from filesystem
 getContent(Path) ->
     okget:getOrElse(file:read_file(Path),<<"">>).
 
-mkInit(Cfg=#htcfg{root=Root}) ->
+mkInit(Cfg=#htcfg{root=Root},Req) ->
     [
      <<"{\n \"websocketURL\": \"">>,getWSUrl(Cfg),
+     <<"\",\n \"client\": \"">>,p6str:mkbin(getHostName(Req)),
      <<"\",\n \"environment\": \"">>,p6str:mkbin(p6init:getEnv()),
      <<"\",\n \"components\": {">>, genComponents(Cfg),
      <<" }\n};\n">>,getContent(Root++"/p6init.js")
