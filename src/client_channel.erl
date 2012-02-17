@@ -203,6 +203,7 @@ fire([_,Pid,_],Msg) -> fire(Pid,Msg);
 fire(Pid,Msg) when is_pid(Pid) ->
     case catch gen_server2:call(Pid,{mmd,self(),Msg},?CHANNEL_DISPATCH_TIMEOUT) of
         ok -> {ok,Pid};
+        {ok, NewPid} -> {ok, NewPid};
         {'EXIT',{Reason,_}} -> {error,Reason};
         {error,waiting_ack} -> {error,retry};
         Other -> ?linfo("Unexpected return when attempting to dispatch to: ~p, return was: ~p",[Pid,Other]),
