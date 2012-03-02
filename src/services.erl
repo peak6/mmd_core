@@ -146,17 +146,23 @@ handle_info(Info, State) ->
     ?linfo("Unexpected info: ~p, with state: ~p",[Info,State]),
     {noreply, State}.
 
+
+
+handle_call({mmd, From, CC=#channel_create{type=call,body=?raw(<<"N">>)}}, _From, State) ->
+    mmd_msg:reply(From, CC, allServiceNames()),
+    {reply, ok, State};
+
 handle_call({mmd, From, CC=#channel_create{type=call,body=undefined}}, _From, State) ->
     mmd_msg:reply(From, CC, allServiceNames()),
     {reply, ok, State};
 
 handle_call({mmd, From, CC=#channel_create{type=call,body=SvcPattern}}, _From, State) ->
     Ret = lists:foldl(fun(Svc,Acc) ->
-			SB = p6str:mkbin(Svc),
-			case re:run(SB,SvcPattern) of
-			    nomatch -> Acc;
-			    _ -> [SB|Acc]
-			end
+			      SB = p6str:mkbin(Svc),
+			      case re:run(SB,SvcPattern) of
+				  nomatch -> Acc;
+				  _ -> [SB|Acc]
+			      end
 		      end,
 		      [],
 		      allServiceNames()),
