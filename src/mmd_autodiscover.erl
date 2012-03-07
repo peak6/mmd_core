@@ -84,6 +84,17 @@ handle_info({udp,Sock,FromIP,Port,Bin},State=#state{sock=Sock,env=MyEnv,port=Por
                  {noreply,State}
     end;
 
+handle_info({udp,Sock,FromIP,FromPort,Bin},State) ->
+    Pkt =
+	case catch binary_to_term(Bin) of
+	    {error,Reason} -> {error,Reason,Bin};
+	    Other -> Other
+	end,
+	    
+    ?lwarn("Unable to handle packet from ~p/~p, packet: ~p, my state: ~p",
+	   [Sock,p6str:ip_port_to_str(FromIP,FromPort), Pkt, ?DUMP_REC(state,State)]),
+    {noreply,State};
+
 handle_info(forcePing,State=#state{pingCount=PC}) ->
     ?linfo("Sending ping: ~p",[PC]),
     {noreply,sendPing(State)};
