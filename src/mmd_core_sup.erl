@@ -78,7 +78,7 @@ init([]) ->
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
     Http = case application:get_env(http_port) of
                undefined -> [];
-               {ok,Port} ->  [?CHILD(http_listener,[Port],worker)]
+               {ok,Port} -> [?CHILD(mmd_cowboy_listener,[Port],worker)]
            end,
     PubSubSpecs = case application:get_env(pub_subs) of
 		      undefined ->

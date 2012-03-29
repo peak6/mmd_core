@@ -1,2 +1,0 @@
--include("mmd_cfg.hrl").
--record(htcfg,{port,root,proxy,trace=false,mmdCfg=#mmd_cfg{}}).
