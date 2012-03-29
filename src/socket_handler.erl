@@ -149,7 +149,7 @@ handle_info({tcp,_,Data},State=#state{mmdCfg=MMDCfg,socket=Socket,chans=Chans,tr
         false -> ok
     end,
     case Msg of 
-        #channel_create{id=Id,service='$mmd',body=?raw(RawMap)} ->
+        #channel_create{id=Id,service=Service,body=?raw(RawMap)} when Service == '$mmd'; Service == <<"$mmd">> ->
             ?map(Map) = mmd_decode:decodeRawFull(RawMap),
             NewMMDCfg = mmd_cfg:update(MMDCfg,lists:map(fun({A,B}) -> {p6str:mkatom(A),B} end,Map)),
             ?linfo("Updated MMDCfg: ~w -> ~w",[MMDCfg,NewMMDCfg]),
