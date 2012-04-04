@@ -168,7 +168,7 @@ handle_info({tcp_closed,_},_) ->
 
 handle_info({'EXIT',Pid,Reason},State=#state{chans=Chans}) ->
     ?lwarn("Force closing channels due to '~p' death for: ~p(~p)",[Reason,Pid,node(Pid)]),
-    case channels:refToId(Pid,Chans) of
+    case channel_mgr:refToIds(Chans, Pid) of
         [] -> ?lwarn("Linked process: ~p(~p) exited: ~p, but no channels associated",
                      [Pid,node(Pid),Reason]);
         Items when is_list(Items) ->
@@ -176,8 +176,8 @@ handle_info({'EXIT',Pid,Reason},State=#state{chans=Chans}) ->
                             <<"Connection to the remote channel was lost.">>),
             dispatch([#channel_close{id=Id,body=ErrMsg} || Id <- Items],State)
     end,
-    {noreply,State#state{chans=channels:removeRef(Pid,Chans)}};
-        
+    {noreply,State#state{chans=channel_mgr:removeRef(Chans, Pid)}};
+
 handle_info(Info, State) ->
     ?linfo("Unexpected handle_info(~p, ~p)",[Info,State]),
     {noreply, State}.
