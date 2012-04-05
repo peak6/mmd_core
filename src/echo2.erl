@@ -83,8 +83,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-process(CC=#channel_close{},Chans) -> 
-    ?ldebug("Closed: ~p",[CC]),
+process(#channel_close{},Chans) ->
     Chans;
 process(Msg,Chans) ->
 %%    ?ldebug("Responding to: ~p",[Msg]),
