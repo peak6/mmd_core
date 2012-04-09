@@ -41,16 +41,14 @@ handleExit(State, Pid, _Reason) ->
 %% dispatch the message for us.
 processOut(State, M) -> processOut(State, M, undefined).
 processOut(State, M=#channel_create{id=Id}, Cfg) ->
-    case ets:member(?tid(State), Id) of
-        true -> {State, dupId(Id)};
-        false ->
-            case ets:info(?tid(State), size) > ?max_chans(State) of
-                true -> {State, maxChans(Id, ?max_chans(State))};
-                false ->
-                    {ok,Pid} = client_channel:new(self(),M,Cfg),
-		    ets:insert(?tid(State), {Id, Pid}),
-                    {State, []}
-            end
+    case ets:info(?tid(State), size) > ?max_chans(State) of
+	true -> {State, maxChans(Id, ?max_chans(State))};
+	false ->
+	    {ok,Pid} = client_channel:new(self(),M,Cfg),
+	    case ets:insert_new(?tid(State), {Id, Pid}) of
+		true -> {State, []};
+		false -> {State, dupId(Id)}
+	    end
     end;
 
 processOut(State, M=#channel_message{id=Id},_Cfg) ->
@@ -71,10 +69,9 @@ processOut(State,M=#channel_close{id=Id},_Cfg) ->
     end.
 
 processIn(State, From,M=#channel_create{id=Id}) ->
-    case ets:member(?tid(State), Id) of
-        false -> ets:insert(?tid(State), {Id, From}),
-		 {State, M};
-        true -> dupId(From,Id),
+    case ets:insert_new(?tid(State), {Id, From}) of
+        true -> {State, M};
+        false -> dupId(From,Id),
                 State
     end;
 
