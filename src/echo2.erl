@@ -26,7 +26,7 @@
 -include_lib("p6core/include/logger.hrl").
 -include("mmd.hrl").
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 
 %%%===================================================================
 %%% API
@@ -48,8 +48,8 @@ init([]) ->
     {ok, channel_mgr:new()}.
 
 handle_call({run,Fun},_From,State) -> {reply,Fun(),State};
-                                   
-handle_call(getState,_From,State) -> 
+
+handle_call(getState,_From,State) ->
     {reply,State,State};
 
 handle_call({setLoad,N},_From,State) ->

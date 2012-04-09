@@ -34,13 +34,13 @@ getID(#channel_message{id=Id}) -> Id.
 
 error(To,InMsg,ErrCode,ErrFmt,ErrArgs) ->
     error(To,InMsg,ErrCode,p6str:mkbin(ErrFmt,ErrArgs)).
-      
+
 error(To,InMsg,ErrCode,ErrBody) ->
     dispatch(To,mkError(InMsg,ErrCode,ErrBody)).
 
 close(To,Id,Body) when is_binary(Id) -> dispatch(To,#channel_close{id=Id,body=Body});
 close(To,InMsg,Body) -> close(To,getID(InMsg),Body).
-    
+
 reply(To,RefId,OutBody) ->
     dispatch(To,mkReply(RefId,OutBody)).
 

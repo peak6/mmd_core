@@ -13,7 +13,7 @@ auth_bad_server_test() ->
 username_to_trader_id_test() ->
     {spawn,{setup,
 		%% setup
-        fun() -> 
+        fun() ->
             mongopools:dev()
         end,
         %% test
@@ -23,7 +23,7 @@ username_to_trader_id_test() ->
 bad_username_to_trader_id_test() ->
     {spawn,{setup,
 		%% setup
-        fun() -> 
+        fun() ->
             mongopools:dev()
         end,
         %% test
@@ -33,15 +33,15 @@ bad_username_to_trader_id_test() ->
 can_su_test_() ->
     {spawn,{setup,
 		%% setup
-        fun() -> 
+        fun() ->
             mongopools:dev(),
             AuthDB = mongoapi:new(repl,<<"auth">>),
             AuthDB:save("sudoers",[{"userName", "bobptest"}])
         end,
         %% cleanup
-        fun(_) -> 
+        fun(_) ->
             AuthDB = mongoapi:new(repl,<<"auth">>),
-            AuthDB:remove("sudoers",[{"userName", "bobptest"}]) 
+            AuthDB:remove("sudoers",[{"userName", "bobptest"}])
         end,
         %% test
         ?_assert(loginservice:can_su("bobptest"))
@@ -50,10 +50,10 @@ can_su_test_() ->
 can_su_fail_test_() ->
     {spawn,{setup,
         %% setup
-        fun() -> 
+        fun() ->
             mongopools:dev(),
             AuthDB = mongoapi:new(repl,<<"auth">>),
-            AuthDB:remove("sudoers",[{"userName", "bobptest"}]) 
+            AuthDB:remove("sudoers",[{"userName", "bobptest"}])
         end,
         %% test
         ?_assertNot(loginservice:can_su("bobptest"))

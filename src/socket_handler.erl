@@ -103,15 +103,15 @@ handle_call({mmd,From,Msg},_From,State=#state{chans=Chans}) ->
     end,
     {reply,ok,State#state{chans=NewChans}};
 
-handle_call(trace,_From,State) -> 
+handle_call(trace,_From,State) ->
     ?linfo("Enabled tracing"),
     {reply,ok,State#state{trace=true}};
 
-handle_call(notrace,_From,State) -> 
+handle_call(notrace,_From,State) ->
     ?linfo("Disabled tracing"),
     {reply,ok,State#state{trace=false}};
 
-handle_call({getInfo,Fields},_From,State) -> 
+handle_call({getInfo,Fields},_From,State) ->
     {reply,record_infograbber:getInfo(Fields,State,record_info(fields,state)),State};
 
 handle_call({take,Socket}, _From, State) ->
@@ -145,7 +145,7 @@ handle_info({tcp,_,<<?PING>>},State=#state{socket=Socket}) ->
     inet:setopts(Socket,[{active,once}]),
     gen_tcp:send(Socket,<<?PONG>>),
     {noreply,State};
-    
+
 handle_info({tcp,_,Data},State=#state{mmdCfg=MMDCfg,socket=Socket,chans=Chans,trace=Trace}) ->
     inet:setopts(Socket,[{active,once}]),
     Msg = mmd_decode:decodeRaw(Data),
@@ -153,7 +153,7 @@ handle_info({tcp,_,Data},State=#state{mmdCfg=MMDCfg,socket=Socket,chans=Chans,tr
         true -> ?linfo("Received from socket: ~w",[Msg]);
         false -> ok
     end,
-    case Msg of 
+    case Msg of
         #channel_create{id=Id,service=Service,body=?raw(RawMap)} when Service == '$mmd'; Service == <<"$mmd">> ->
             ?map(Map) = mmd_decode:decodeRawFull(RawMap),
             NewMMDCfg = mmd_cfg:update(MMDCfg,lists:map(fun({A,B}) -> {p6str:mkatom(A),B} end,Map)),
@@ -162,7 +162,7 @@ handle_info({tcp,_,Data},State=#state{mmdCfg=MMDCfg,socket=Socket,chans=Chans,tr
             {noreply,State#state{mmdCfg=NewMMDCfg}};
         _ ->
             case channel_mgr:processOut(Chans,Msg,MMDCfg) of
-                {NewChans,Msgs} -> 
+                {NewChans,Msgs} ->
                     dispatch(Msgs,State),
                     {noreply,State#state{chans=NewChans}}
             end
@@ -201,7 +201,7 @@ dispatch(Msgs,State) when is_list(Msgs) ->
 
 dispatch(Msg, #state{socket=Socket,trace=Trace}) ->
     case Trace of
-        true -> 
+        true ->
             ?linfo("Sending to socket: ~w",[Msg]);
         _ -> ok
     end,

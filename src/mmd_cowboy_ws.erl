@@ -47,10 +47,10 @@ websocket_handle({text, Data}, Req, State) ->
 	{'EXIT',{Reason,Stack}} ->
 	    ?lerr("Error: ~p / ~p, processing: ~p",[Reason,Stack,Data]),
 	    {reply, {text, json:encode({obj,[{'_sock_error',p6str:mkio({Reason,Stack})}]})}, Req, State, hibernate};
-	Err = {error,_} -> 
+	Err = {error,_} ->
 	    ?lwarn("Received unparsable json text, error: ~p -- text: ~p",[Err,Data]),
 	    {reply,{text,json:encode({obj,[{'_sock_error',p6str:mkio(Err)}]})},Req,State,hibernate};
-	Msg -> 
+	Msg ->
 	    process_ws(Msg,Req,State)
     end.
 
@@ -115,7 +115,7 @@ jsreply(Msg,Req,State) ->
         {ok,JSON} ->
 	    ?trc(State,"Sending: ~p",[JSON]),
 	    {reply,{text,JSON},Req,State,hibernate};
-        Error -> 
+        Error ->
             ?lerr("Error encoding: ~p~nError message: ~p",[Msg,Error]),
 	    {reply,{text,mkError(Msg,"Error encoding response, contact support.")},Req,State,hibernate}
     end.
@@ -131,4 +131,4 @@ mkError(Id,Code,Msg) ->
             {close,p6str:mkbin(uuid:to_string(Id))},
             {body,{obj,[{<<"_mmd_error">>,Code},{msg,p6str:mkbin(Msg)}]}}
            ]
-      }).    
+      }).

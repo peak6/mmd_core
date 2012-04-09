@@ -71,7 +71,7 @@ handle_info(D=?DOWN(Ref,Pid,Reason),State=#state{chans=Chans}) ->
         _ -> ?lerr("~p: ~p crashed: ~p",[Who,Pid,Reason]),
              notifyExit(Ref,Chan)
     end,
-    case Chan of 
+    case Chan of
         undefined -> {noreply,State};
         _ -> {noreply,State#state{chans=lists:keydelete(Chan#chan.id,#chan.id,Chans)}}
     end;
@@ -128,7 +128,7 @@ process(From,Msg=#channel_message{id=Id},State=#state{chans=Chans}) ->
 
 process(From,Msg=#channel_close{id=Id,body=B},State=#state{chans=Chans}) ->
     case B of
-        ?error(?TIMEOUT,_) -> 
+        ?error(?TIMEOUT,_) ->
             ?linfo("Received timeout error from: ~p for ~p",[From,Id]);
         _ -> ok
     end,
@@ -137,7 +137,7 @@ process(From,Msg=#channel_close{id=Id,body=B},State=#state{chans=Chans}) ->
     State#state{chans=lists:keydelete(Id,#chan.id,Chans)}.
 
 cancelMonitors(Id,Chans) ->
-    case lists:keyfind(Id,#chan.id,Chans) of 
+    case lists:keyfind(Id,#chan.id,Chans) of
         false -> ok; %%?lerr("Can't cancel monitors for unknown channel: ~p",[Id]);
         #chan{srvRef=S,cliRef=C,srv=SrvPid} ->
             erlang:demonitor(S,[flush]),

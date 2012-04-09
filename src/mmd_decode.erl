@@ -43,7 +43,7 @@ decode_obj(<<?CHANNEL_CREATE,Chan:16/binary,Type:1/binary,SvcSize:8/unsigned-int
                     body=?raw(Body)};
 
 decode_obj(<<?VARINT_CHANNEL_CREATE,Chan:16/binary,Data/binary>>) ->
-    {[Type,Svc,Timeout,AT],Body} = 
+    {[Type,Svc,Timeout,AT],Body} =
         decode_chain(Data,[channel_type,atom,svarint64,uuid_notag]),
     #channel_create{service=Svc,
                     type=Type,
@@ -71,7 +71,7 @@ decode_obj(<<?VARINT_ERROR,Bin/binary>>) ->
     {ErrCode,PostErr} = decode_type(svarint64,Bin),
     {Msg,Rest} = decode_obj(PostErr),
     {?error(ErrCode,Msg),Rest};
-decode_obj(<<?VARINT_ARRAY,Bin/binary>>) -> 
+decode_obj(<<?VARINT_ARRAY,Bin/binary>>) ->
     {Sz,Rest} = decode_varint(Bin),
     decode_array(Rest,Sz,[]);
 decode_obj(?TAG_WITH_SIZE(?FAST_ARRAY,Sz,Rest)) ->
@@ -124,11 +124,11 @@ decode_obj(<<1:4,Sz:4,Int:Sz/unsigned-unit:8,Rest/binary>>) ->
     {Int,Rest};
 decode_obj(<<0:4,Sz:4,Int:Sz/signed-unit:8,Rest/binary>>) ->
     {Int,Rest};
-decode_obj(<<Other:1/binary,_Rest/binary>>) -> 
+decode_obj(<<Other:1/binary,_Rest/binary>>) ->
     throw({bad_tag,Other}).
 
 
-               
+
 
 
 
@@ -188,7 +188,7 @@ decode_type(float,<<Float:32/float,Rest/binary>>) ->
 decode_type(time,Bin) ->
     {Ts,Rest} = decode_svarint(Bin),
     {?time(Ts),Rest}.
-    
+
 
 
 decode_map(Bin,0,Acc) ->

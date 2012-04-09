@@ -44,7 +44,7 @@ do_action(registerUnique, O, {'$array', [Name, Key]}) ->
 	       <<"$node">> -> node();
 	       _ -> Key
 	   end,
-    
+
     case validateName(Name) of
         ok -> services:regUnique(O, p6str:mkatom(Name), [unique, Key2]);
         Other -> ?error(?INVALID_REQUEST,p6str:mkbin(Other))

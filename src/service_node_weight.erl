@@ -17,7 +17,7 @@
 
 -include_lib("p6core/include/p6core.hrl").
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 -define(TABLE,node2weight).
 
 -record(state,{mydc,pattern}).

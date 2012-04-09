@@ -27,11 +27,11 @@
 -include_lib("p6core/include/logger.hrl").
 
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 
 -record(state, {lsock, acceptor, max_chans_per_sock}).
 
--define(LISTEN_OPTS, 
+-define(LISTEN_OPTS,
         [{active,false},
          {keepalive,true},
          {packet,4},

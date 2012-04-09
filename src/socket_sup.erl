@@ -73,10 +73,10 @@ process([{mmd,Opts}|Listeners], Acc) ->
 %% Skip non "mmd" listeners
 process([{_,_}|Listeners], Acc) -> process(Listeners,Acc).
 
-    
+
 get(Key,Default,PropList) ->
     case proplists:get_value(Key,PropList) of
         undefined -> Default;
         Other -> Other
     end.
-    
+

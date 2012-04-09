@@ -21,12 +21,12 @@
 -include("mmd.hrl").
 
 decode({json,Json}) -> decode(Json);
-decode(Json) -> 
+decode(Json) ->
     {ok,Obj,[]} = json:decode(Json),
     catch decodeDoc(Obj).
 
 decodeObj({json,Json}) -> decodeObj(Json);
-decodeObj(JS) -> 
+decodeObj(JS) ->
     case json:decode(JS) of
         {ok,Obj,[]} -> catch body(Obj);
         E -> E
@@ -92,13 +92,13 @@ transUUID(M=?map(Map)) ->
         [undefined,SecID] -> ?secid(uuid(SecID));
         [UUID,undefined] -> ?uuid(uuid(UUID))
     end.
-    
 
-parseTime(Time) when is_binary(Time) -> parseTime(binary_to_list(Time));                   
+
+parseTime(Time) when is_binary(Time) -> parseTime(binary_to_list(Time));
 parseTime(Time) when is_integer(Time) -> ?time(Time);
 parseTime(Date) when is_list(Date) andalso length(Date) =< 10 ->
     ?time(p6time:convert(list_to_tuple(lists:map(fun list_to_integer/1, string:tokens(Date,"/"))),date,us)).
 
 
 
-    
+

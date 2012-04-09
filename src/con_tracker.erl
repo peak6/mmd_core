@@ -36,7 +36,7 @@
 -include_lib("p6core/include/logger.hrl").
 
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 
 -define(TABLE,mmd_cons).
 -record(con_info,{type,name,pid,port,start=os:timestamp(),ref}).
@@ -107,4 +107,4 @@ call(Term) -> gen_server:call(?SERVER,Term).
 
 uptime(MSU) ->
     calendar:time_difference(calendar:now_to_local_time(MSU),calendar:local_time()).
-    
+

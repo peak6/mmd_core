@@ -41,13 +41,13 @@ handle(OrigReq,Cfg) ->
 			    reply(404,[],p6str:mkio(Text),Req,Cfg);
                         {ok,?error(Code,Text)} ->
 			    reply(500,[],p6str:mkio("Error Code: ~p\nError Message: ~s",[Code,p6str:mkstr(Text)]),Req,Cfg);
-                        {ok,Result} -> 
+                        {ok,Result} ->
                             case json_encode:encode(Result) of
                                 {ok,JSON} -> reply(200,[{<<"Content-Type">>,mimetypes:extension("json")}],JSON,Req,Cfg);
 				Other -> reply(500,[],p6str:mkio("Failed to encode response: ~p",[Other]),Req,Cfg)
                             end;
-                        {error,timeout} -> reply(408,[],"Timeout",Req,Cfg); 
-                        Other -> reply(500,[],p6str:mkio("Call Error: ~p",[Other]),Req,Cfg) 
+                        {error,timeout} -> reply(408,[],"Timeout",Req,Cfg);
+                        Other -> reply(500,[],p6str:mkio("Call Error: ~p",[Other]),Req,Cfg)
                     end;
                 Other -> reply(400,[],p6str:mkio("Bad Request: ~p",[Other]),Req,Cfg)
             end
@@ -56,7 +56,7 @@ handle(OrigReq,Cfg) ->
 terminate(_Req,_State) -> ok.
 
 mkCreateChannel(Svc,Props) ->
-    Vals = 
+    Vals =
         p6props:anyAndMap([{<<"token">>,fun p6uuid:safeparse/1},
                            {<<"body">>,fun json_decode:decodeObj/1},
                            {<<"timeout">>,{fun p6str:to_integer/1,5000}}],

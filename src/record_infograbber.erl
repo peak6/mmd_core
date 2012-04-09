@@ -10,6 +10,6 @@ getInfo(all,Rec,RecFields) -> getInfo(RecFields,Rec,RecFields);
 getInfo(Field,Rec,RecFields) when is_atom(Field) -> valueOf(Field,Rec,2,RecFields);
 getInfo(Fields,Rec,RecFields) -> [{F,valueOf(F,Rec,2,RecFields)} || F <- Fields].
 
-    
-    
-    
+
+
+

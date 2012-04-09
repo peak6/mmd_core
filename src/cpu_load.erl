@@ -27,7 +27,7 @@
 -include_lib("p6core/include/logger.hrl").
 
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 
 %%%===================================================================
 %%% API
@@ -46,7 +46,7 @@ avg15() -> cpu_sup:avg15().
 
 init([]) ->
     case os:type() of
-	{unix,linux}-> 
+	{unix,linux}->
 	    application:start(os_mon),
 	    proc_lib:spawn_link(fun() -> updateLoop(p6props:getApp('cpu_load.updateInterval',1000)) end),
 	    {ok, genLoad()};
@@ -79,12 +79,12 @@ code_change(_OldVsn, Load, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-    
+
 updateLoop(SleepTime) ->
     timer:sleep(SleepTime),
     cast({update,genLoad()}),
     updateLoop(SleepTime).
-        
+
 genLoad() ->
     cpu_sup:util().
 

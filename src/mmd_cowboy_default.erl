@@ -35,7 +35,7 @@ terminate(_Req,_State) -> ok.
 redirect(To,Req,Cfg) ->
     {QS,_} = ?get(raw_qs,Req),
     {OP,_} = ?get(raw_path,Req),
-    case QS of 
+    case QS of
         <<>> -> From = OP,
                 ToLocation = To;
         _ -> From = [OP,$?,QS],
@@ -149,14 +149,14 @@ get_obj(Base) ->
 
 %% Iterate webroot files looking for symlinks and generate js objects that represent those links
 gen_components(#htcfg{root=Root}) ->
-    Comps = 
+    Comps =
 	lists:foldl( %% Each file
 	  fun(Entry,Objs) ->
 		  FullName = filename:join(Root,Entry),
-		  case file:read_link(filename:join(Root,Entry)) of 
+		  case file:read_link(filename:join(Root,Entry)) of
 		      {ok,OrigPath} -> %% Is symlink
 			  Path = ensure_trailing_slash(OrigPath),
-			  Ent = 
+			  Ent =
 			      case get_obj(FullName) of %% check for component.json
 				  undefined -> [<<"\n  \"">>,Entry,<<"\": {\"path\": \"/">>,Path,<<"\"}">>];
 				  {ObjFile,Bin} -> [<<"\n  \"">>,

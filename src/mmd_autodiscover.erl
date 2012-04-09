@@ -18,7 +18,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 
 -include_lib("p6core/include/p6core.hrl").
 
@@ -34,7 +34,7 @@ start_link() ->
 
 init([]) ->
     case application:get_env(auto_discover) of
-        undefined -> 
+        undefined ->
             ?linfo("Auto discover disabled"),
             ignore;
         {ok,{Addr,Port}} ->
@@ -57,13 +57,13 @@ handle_cast(Msg, State) ->
     ?lwarn("Unexpected handle_cast(~p, ~p)",[Msg,State]),
     {noreply,State}.
 
-    
+
 handle_info({udp,Sock,FromIP,Port,Bin},State=#state{sock=Sock,env=MyEnv,port=Port,ignore=Ignore}) ->
     MyNode = node(),
     MyCookie = erlang:get_cookie(),
     case catch binary_to_term(Bin) of
         #ping{node=MyNode} -> {noreply,State}; %% Ignore our own ping
-        #ping{env=MyEnv,node=Node,cookie=MyCookie} -> 
+        #ping{env=MyEnv,node=Node,cookie=MyCookie} ->
             case lists:member(Node,nodes()) of
                 true -> {noreply,State};
                 false ->
@@ -71,7 +71,7 @@ handle_info({udp,Sock,FromIP,Port,Bin},State=#state{sock=Sock,env=MyEnv,port=Por
                     mmd:tempJoin(Node),
                     {noreply,adjustTimer(State#state{ignore=[]})}
             end;
-        Ping = #ping{} -> 
+        Ping = #ping{} ->
             case lists:member(Ping,Ignore) of
                 true -> {noreply,State};
                 false ->
@@ -90,7 +90,7 @@ handle_info({udp,Sock,FromIP,FromPort,Bin},State) ->
 	    {error,Reason} -> {error,Reason,Bin};
 	    Other -> Other
 	end,
-	    
+
     ?lwarn("Unable to handle packet from ~p/~p, packet: ~p, my state: ~p",
 	   [Sock,p6str:ip_port_to_str(FromIP,FromPort), Pkt, ?DUMP_REC(state,State)]),
     {noreply,State};
@@ -130,7 +130,7 @@ adjustTimer(State=#state{timer=T,nodeCount=OrigNC}) ->
     case length(nodes())+1 of
         OrigNC -> State;
         NC ->
-            case T of 
+            case T of
                 undefined -> ok;
                 Ref ->
                     {ok,cancel} = timer:cancel(Ref)
@@ -140,5 +140,5 @@ adjustTimer(State=#state{timer=T,nodeCount=OrigNC}) ->
             {ok,TRef} = timer:send_interval(Timeout,sendPing),
             State#state{timer=TRef,nodeCount=NC}
     end.
-            
-            
+
+

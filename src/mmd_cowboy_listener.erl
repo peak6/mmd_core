@@ -12,9 +12,9 @@ start_link(Port) ->
 	    {ok,R} when is_list(R) -> R;
 	    undefined -> os:getenv("HOME") ++ "/webroot"
 	end,
-    
-    Proxy = 
-        case application:get_env(http_proxy_url) of 
+
+    Proxy =
+        case application:get_env(http_proxy_url) of
             undefined -> undefined;
             {ok,Val} -> p6str:mkstr(Val)
         end,

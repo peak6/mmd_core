@@ -31,7 +31,7 @@ start_link() ->
 init([]) ->
     ?TABLE = ets:new(?TABLE,[named_table,protected]),
     services:regGlobal(?SERVICE),
-    
+
     {ok,nostate}.
 
 handle_call({mmd,From,Msg},_From,State) ->
@@ -49,7 +49,7 @@ handle_cast({clear,Name},State) ->
 handle_cast({reg,Name},State) ->
     ins(Name),
     {noreply,State};
-    
+
 handle_cast({incr,Name},State) ->
     case catch inc(Name) of
         {'EXIT',{badarg,_}} ->

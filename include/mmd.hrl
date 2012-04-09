@@ -74,7 +74,7 @@
 -define(INVALID_CHANNEL,9).
 -define(TIMEOUT,10).
 -define(SERVICE_BUSY,11).
- 
+
 
 %% See protocol.txt for details of these
 %% Message Types
@@ -86,13 +86,13 @@
 %%Object Types
 %%Things with size
 -define(FAST_MAP,       $r).
--define(VARINT_MAP,     $m). 
+-define(VARINT_MAP,     $m).
 -define(FAST_ARRAY,     $a).
--define(VARINT_ARRAY,   $A). 
+-define(VARINT_ARRAY,   $A).
 -define(FAST_STRING,    $s).
 -define(VARINT_STRING,  $S).
 -define(FAST_ERROR,     $e).
--define(VARINT_ERROR,   $E). 
+-define(VARINT_ERROR,   $E).
 -define(FAST_BYTES,     $q).
 -define(VARINT_BYTES,   $b).
 
@@ -114,15 +114,15 @@
 -define(UINT2,    16#12).
 -define(UINT4,    16#14).
 -define(UINT8,    16#18).
--define(SVARINT64,   $L). 
--define(VARINT64,    $l). 
--define(SVARINT32,   $I). 
--define(VARINT32,    $i). 
--define(DOUBLE,      $D). 
+-define(SVARINT64,   $L).
+-define(VARINT64,    $l).
+-define(SVARINT32,   $I).
+-define(VARINT32,    $i).
+-define(DOUBLE,      $D).
 -define(FLOAT,       $d).
--define(NULL,        $N). 
--define(TRUE,        $T). 
--define(FALSE,       $F). 
+-define(NULL,        $N).
+-define(TRUE,        $T).
+-define(FALSE,       $F).
 -define(UUID,        $U).
 -define(SECID,       $$).
 -define(BYTE,        $B).

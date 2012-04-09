@@ -78,7 +78,7 @@ waitFor(WaitFor,WaitUntil,Received) ->
                     waitFor(lists:keydelete(Id,2,WaitFor),WaitUntil,[{SvcPid,Body}|Received])
             end;
         ?DOWN(Ref,Pid,Reason) ->
-            case lists:keyfind(Ref,1,WaitFor) of 
+            case lists:keyfind(Ref,1,WaitFor) of
                 {Ref,_Id,_CCPid,_Pid} -> waitFor(
                                     lists:keydelete(Ref,1,WaitFor),
                                     WaitUntil,
@@ -89,7 +89,7 @@ waitFor(WaitFor,WaitUntil,Received) ->
         Other ->
             ?lwarn("Unexpected: ~p",[Other]),
             waitFor(WaitFor,WaitUntil,Received)
-            
+
     after WaitTime ->
             timeout(WaitFor,Received)
     end.

@@ -87,7 +87,7 @@ setEnabled(Name,Monitors,Enabled) ->
         M=#monitor{} ->{ok,lists:keyreplace(Name,#monitor.name,Monitors,M#monitor{enabled=Enabled})}
     end.
 
-handle_call({store,M=#monitor{name=N}},_From,State=#state{monitors=Mons}) -> 
+handle_call({store,M=#monitor{name=N}},_From,State=#state{monitors=Mons}) ->
     {reply,ok,State#state{monitors=lists:keystore(N,#monitor.name,Mons,M)}};
 handle_call(getMonitors,_From,State) -> {reply,State#state.monitors,State};
 handle_call(enable,_From,State) -> {reply,ok,State#state{enabled=true}};
@@ -108,12 +108,12 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 
-    
+
 handle_info(check, State=#state{enabled=false}) -> {noreply,State};
 handle_info(check,State=#state{monitors=Mons}) ->
     runChecks(Mons),
     {noreply,State};
-       
+
 handle_info(Info, State) ->
     ?linfo("Unexpected handle_info(~p, ~p)",[Info,State]),
     {noreply, State}.
@@ -128,9 +128,9 @@ code_change(_OldVsn, State, _Extra) ->
 runChecks(Monitors) when is_list(Monitors) ->
     lists:foreach(fun(I)->runCheck(I) end, Monitors).
 
-info(Tuple,Stat) when is_tuple(Tuple) -> 
+info(Tuple,Stat) when is_tuple(Tuple) ->
     p6proc:info(element(1,Tuple),Stat);
-info(Pid,Stat) -> 
+info(Pid,Stat) ->
     p6proc:info(Pid,Stat).
 
 doApply({M,F,A}) -> erlang:apply(M,F,A).

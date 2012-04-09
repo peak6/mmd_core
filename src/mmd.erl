@@ -11,7 +11,7 @@ chanStatN(Field,Min) when is_atom(Field) ->
                  end,
                  chanStat(Field)).
 
-chanStat() -> 
+chanStat() ->
     [{P,process_info(P)} || P <- clientChannels()].
 
 chanStat(Fields) ->
@@ -36,7 +36,7 @@ conStat() ->
 
 conStat(Fields) ->
     [{X,process_info(P,Fields)} || X={P,_} <- connections()].
-    
+
 connections() ->
     con_tracker:getConnections().
 

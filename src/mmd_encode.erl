@@ -42,9 +42,9 @@ encode_obj(?byte(Byte)) ->
     [?BYTE,Byte];
 encode_obj(?uuid(Data)) ->
     [?UUID,encode_type(uuid,Data)];
-encode_obj(?secid(Data)) -> 
+encode_obj(?secid(Data)) ->
     [?SECID,encode_type(secid,Data)];
-encode_obj(?time(Data)) -> 
+encode_obj(?time(Data)) ->
     [?VARINT_TIME,encode_type(date,Data)];
 %% exact types
 encode_obj(true) -> [?TRUE];
@@ -67,7 +67,7 @@ encode_obj(Obj) when is_list(Obj) ->
     [?VARINT_ARRAY,encode_type(array,Obj)];
 encode_obj(Obj) when is_tuple(Obj) ->
     [?VARINT_ARRAY,encode_type(array,Obj)].
-    
+
 %% Encodes a given value as the specified type
 %% Note: This does NOT prefix with a type specifier, it's up to the caller
 %%       to do that.

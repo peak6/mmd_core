@@ -101,7 +101,7 @@ handle_info({mmd,From,CC=#channel_close{}}, State) ->
     fire(resolveDest(From,State),CC),
     unlinkAll(State),
     {stop,normal,nostate};
-        
+
 handle_info({mmd,From,Msg}, State) ->
     fire(resolveDest(From,State),Msg),
     {noreply,State};
@@ -122,7 +122,7 @@ resolveDest(From,#state{owner=From,remote=R}) -> R;
 resolveDest(From,#state{owner=O,remote=From}) -> O;
 resolveDest(From,#state{owner=O,remote={mod,_}}) when From == self() -> O;
 resolveDest(From,State) -> ?lwarn("Can't resolve: ~p -> ~p",[From,State]), error({bad_state,From,State}).
-                               
+
 
 %%%===================================================================
 %%% Internal functions
@@ -138,12 +138,12 @@ nextTimeout(Create=#create{owner=Owner,createTime=CT,remote=RPid,msg=#channel_cr
 %%            ?ldebug("Service busy, will retry: ~p",[Create]),
             {noreply,Create,100}
     end.
-            
-            
+
+
 
 initChannel(Create=#create{owner=Owner,msg=CC=#channel_create{id=Id,service=Svc},remote=Pid}) when is_pid(Pid) ->
     case fire(Pid,CC) of
-        {ok,Pid} -> 
+        {ok,Pid} ->
             link(Pid),
             create_tracker:incr(Svc),
             {noreply,#state{owner=Owner,remote=Pid,id=Id,type=client,svc=Svc}};
@@ -155,15 +155,15 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{serv
     case services:findBalanced(Svc) of
         {ok,Entries} ->
             case fire(Entries,CC) of
-                {ok,Pid} -> 
+                {ok,Pid} ->
                     link(Pid),
                     create_tracker:incr(Svc),
                     case CC#channel_create.type of
                         call -> ok;
-                        sub -> 
+                        sub ->
                             case MMDCfg#mmd_cfg.ackSub of
                                 false -> ok;
-                                true -> 
+                                true ->
                                     fire(Owner,#channel_message{id=Id,body= <<"$ack$">>})
                             end
                     end,
@@ -172,7 +172,7 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{serv
                 Other -> ?lwarn("Failed to create channel, reason: ~p, targets: ~p",[Other,Entries]),
                          nextTimeout(Create)
             end;
-        {error,not_found} -> 
+        {error,not_found} ->
             fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_NOT_FOUND,"Service '~p' not found.",[Svc])}),
             unlink(Owner),
             ?linfo("~p asked for non-existant service: ~p",[Owner,Svc]),
@@ -188,7 +188,7 @@ fire([],_Msg) ->
     {error,all_bad};
 fire([[_,Pid,_]|Pids], M)->
     case fire(Pid,M) of
-        {ok,Pid} -> 
+        {ok,Pid} ->
             case catch link(Pid) of
                 true -> {ok,Pid};
                 {'EXIT',{noproc,_}} ->
@@ -205,7 +205,7 @@ fire([[_,Pid,_]|Pids], M)->
 fire(undefined,M) -> ?lerr("Unable to send message to 'undefined': ~p",[M]),
                      {error,bad_pid};
 fire([_,Pid,_],Msg) -> fire(Pid,Msg);
-fire(Pid,Msg) when is_pid(Pid) -> 
+fire(Pid,Msg) when is_pid(Pid) ->
     case catch gen_server2:call(Pid,{mmd,self(),Msg},?CHANNEL_DISPATCH_TIMEOUT) of
         ok -> {ok,Pid};
         {'EXIT',{Reason,_}} -> {error,Reason};

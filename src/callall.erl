@@ -40,16 +40,16 @@ handleCall(From,CC=#channel_create{timeout=Timeout,auth_token=AT,body=?map(Map)}
                     mmd_msg:reply(From,CC,?map(Ret));
                 Other ->
                     ?lerr("Received ~p from cluster_mmd_call:call(~p, ~p, ~p, ~p)",[Other,Svc,Body,AT,Timeout]),
-                    mmd_msg:reply(From,CC,?error(?SERVICE_ERROR,p6str:mkbin("Unexpected return from cluster call: ~p",[Other])))         
+                    mmd_msg:reply(From,CC,?error(?SERVICE_ERROR,p6str:mkbin("Unexpected return from cluster call: ~p",[Other])))
                 end
     end;
-        
+
 handleCall(From,CC=#channel_create{}) ->
     badCall(From,CC).
 
 badCall(From,Create) ->
     mmd_msg:error(From,Create,?INVALID_REQUEST,<<"Call takes a map(service,body)">>).
-    
+
 -spec(handleSubscribe(From::pid(),Create::#channel_create{}) -> ok).
 handleSubscribe(From,ChanCreate=#channel_create{}) ->
     mmd_msg:error(From,ChanCreate,?INVALID_REQUEST,<<"Subscribe not supported">>).

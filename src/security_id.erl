@@ -17,10 +17,10 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Convert a security key to a security ID.  The security key is a 
-%% string and the security id is 128 bit binary.  The conversion 
+%% Convert a security key to a security ID.  The security key is a
+%% string and the security id is 128 bit binary.  The conversion
 %% is lossless.  The formats are documented at the top of this file.
-%% 
+%%
 %% @spec get_id(string()) -> binary() | error
 %% @end
 %%--------------------------------------------------------------------
@@ -31,7 +31,7 @@ get_id(SecKey) when is_binary(SecKey) ->
     case security_id_cache:getByKey(SecKey) of
         undefined ->
             Id = compute_id(SecKey),
-            
+
             security_id_cache:store(Id,SecKey),
             Id;
         Id -> Id
@@ -52,21 +52,21 @@ compute_id(<<"O:",Rem/binary>>) when size(Rem) > 10 ->
       Sym/binary,
       StrkI:32,0:(9-Sz)/unit:8>>;
 
-compute_id(<<"S:",Symbol/binary>>) when size(Symbol) > 0 -> 
+compute_id(<<"S:",Symbol/binary>>) when size(Symbol) > 0 ->
     Sz = size(Symbol),
     Pad = 15-Sz,
     <<?STOCK,Sz:5,Symbol/binary,0:Pad/unit:8>>;
 
-compute_id(<<"F:",Symbol/binary>>) when size(Symbol) > 2 -> 
+compute_id(<<"F:",Symbol/binary>>) when size(Symbol) > 2 ->
     Sz = size(Symbol),
     Pad = 15-Sz,
     <<?FUTURE,Sz:5,Symbol/binary,0:Pad/unit:8>>.
-    
-            
+
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Convert a security ID to a security key.  The security key is a 
-%% binary string and the security id is 128 bit binary.  The conversion 
+%% Convert a security ID to a security key.  The security key is a
+%% binary string and the security id is 128 bit binary.  The conversion
 %% is lossless.  The formats are documented at the top of this file.
 %%
 %% @end
@@ -102,14 +102,14 @@ compute_key(<<?STOCK,SymSz:5,Symbol:SymSz/binary,_/binary>>) ->
 %% Stock
 compute_key(<<?FUTURE,SymSz:5,Symbol:SymSz/binary,_/binary>>) ->
     <<"F:",Symbol/binary>>.
-                  
 
 
-fmt_strk(Int) when is_integer(Int) -> 
+
+fmt_strk(Int) when is_integer(Int) ->
     case lists:reverse(integer_to_list(Int)) of
         [$0,A,B|Rem] -> lists:reverse([A,B,$.|Rem]);
         [A,B,C |Rem] -> lists:reverse([A,B,C,$.|Rem])
     end.
 
 %% vim: ts=4:sts=4:sw=4:et:sta:
-            
+

@@ -26,7 +26,7 @@
 -include_lib("p6core/include/logger.hrl").
 -include("mmd.hrl").
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 
 -record(state, {}).
 
@@ -40,7 +40,7 @@ start_link() ->
 transformHostLoad([_O,_K,{S,SL,_}],Load) -> {S,SL,Load};
 transformHostLoad([_O,_K,{SL,_}],Load) -> {SL,Load};
 transformHostLoad(_OtherData,_Load) -> '$ignore'.
-    
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================

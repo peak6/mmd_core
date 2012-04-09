@@ -25,7 +25,7 @@ close(Sock) when is_port(Sock) -> gen_tcp:close(Sock).
 
 close(Sock,Id, Body) ->
     send(Sock,#channel_close{id=Id,body=Body}).
-    
+
 call(Sock,Svc,Body) ->
     call(Sock,Svc,?NO_AUTH,Body).
 call(Sock,Svc,AT,Body) ->

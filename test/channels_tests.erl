@@ -26,7 +26,7 @@ filterRefs_test() ->
 
 partitionRef_test() ->
     ?assertEqual({[{b,2}],[{a,1},{c,1}]},channels:partitionRef(2, ?DATA)).
-    
+
 each_test() ->
     put(c,0),
     channels:each(fun(_,_)->put(c,get(c)+1) end,?DATA),

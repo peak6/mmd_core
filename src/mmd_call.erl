@@ -30,4 +30,4 @@ call(CC=#channel_create{id=Chan,timeout=Timeout}) ->
            end,
     erlang:demonitor(Ref,[flush]),
     Resp.
-    
+

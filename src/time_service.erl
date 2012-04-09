@@ -34,7 +34,7 @@
 -include_lib("p6core/include/logger.hrl").
 -include("mmd.hrl").
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 
 
 %%%===================================================================
@@ -57,7 +57,7 @@ init([]) ->
 
 handle_call({mmd,From,Msg}, _From, Chans) ->
     case channel_mgr:processIn(Chans,From,Msg) of
-        {NewChans,CC=#channel_create{}} -> 
+        {NewChans,CC=#channel_create{}} ->
             {ReallyNew,[]} = channel_mgr:processOut(NewChans,mmd_msg:mkReply(CC,mkTime())),
             {reply,ok,ReallyNew};
         {NewChans,_} -> {reply,ok,NewChans};
@@ -82,7 +82,7 @@ mkTime() ->
 handle_info(tick,Chans) ->
     channel_mgr:sendAll(Chans,mkTime()),
     {noreply,Chans};
-                             
+
 handle_info(Info, State) ->
     ?lwarn("Unexpected handle_info(~p, ~p)",[Info,State]),
     {noreply, State}.
