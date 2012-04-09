@@ -14,15 +14,18 @@
 -module(channel_mgr).
 -include("mmd.hrl").
 -include_lib("p6core/include/logger.hrl").
--export([new/0]).
+-export([new/0, new/1]).
 -export([handleExit/3,processOut/2,processOut/3,processIn/3]).
 -export([sendAll/2]).
 -export([refToIds/2, removeRef/2]).
 
--record(state, {tid}).
+-record(state, {tid, max_chans}).
 -define(tid(S), S#state.tid).
+-define(max_chans(S), S#state.max_chans).
 
-new() -> #state{tid = ets:new(channel_mgr, [set])}.
+new() -> new(?MAX_CONCURRENT_CHANNELS).
+new(MaxChans) -> #state{tid = ets:new(channel_mgr, [set]),
+			max_chans = MaxChans}.
 
 sendAll(State, Body) ->
     ets:foldl(fun({Id, Ref}, S) ->
@@ -41,9 +44,9 @@ processOut(State, M=#channel_create{id=Id}, Cfg) ->
     case ets:member(?tid(State), Id) of
         true -> {State, dupId(Id)};
         false ->
-            case ets:info(?tid(State), size) of
-                N when N > ?MAX_CONCURRENT_CHANNELS -> {State, maxChans(Id,N)};
-                _ ->
+            case ets:info(?tid(State), size) > ?max_chans(State) of
+                true -> {State, maxChans(Id, ?max_chans(State))};
+                false ->
                     {ok,Pid} = client_channel:new(self(),M,Cfg),
 		    ets:insert(?tid(State), {Id, Pid}),
                     {State, []}
@@ -96,7 +99,9 @@ removeRef(State, Ref) ->
     ets:match_delete(?tid(State), [{'_', Ref}]),
     State.
 
-maxChans(Id,_N) -> err(Id,?INVALID_CHANNEL,"Maximum channels per connection (~p) reached",[?MAX_CONCURRENT_CHANNELS]).
+maxChans(Id, MaxChans) ->
+    err(Id, ?INVALID_CHANNEL,
+	"Maximum channels per connection (~p) reached", [MaxChans]).
 
 dupId(From,Id) -> fire(From,dupId(Id)).
 dupId(Id) -> err(Id,?INVALID_CHANNEL,<<"Duplicate channel id detected.">>).
