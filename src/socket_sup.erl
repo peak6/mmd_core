@@ -18,6 +18,7 @@
 
 -define(SERVER, ?MODULE).
 -include_lib("p6core/include/logger.hrl").
+-include("mmd.hrl").
 
 -define(DEFAULT_RESTART,permanent).
 -define(DEFAULT_SHUTDOWN,2000).
@@ -64,7 +65,10 @@ process([{mmd,Opts}|Listeners], Acc) ->
     process(Listeners,[?NCHILD(
                           get(name,make_ref(),Opts),
                           socket_listener,
-                          [get(port,0,Opts)],
+                          [get(port, 0, Opts),
+			   get(max_chans_per_sock,
+			       ?MAX_CONCURRENT_CHANNELS,
+			       Opts)],
                           worker)|Acc]);
 %% Skip non "mmd" listeners
 process([{_,_}|Listeners], Acc) -> process(Listeners,Acc).

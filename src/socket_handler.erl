@@ -24,7 +24,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/1]).
 -export([takeControl/2]).
 -export([getInfo/2]).
 -export([trace/1,notrace/1]).
@@ -39,14 +39,19 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {socket,chans=channel_mgr:new(),sockName,trace=false,ack=disabled,mmdCfg=#mmd_cfg{}}).
+-record(state, {socket,
+		chans=channel_mgr:new(),
+		sockName,
+		trace=false,
+		ack=disabled,
+		mmdCfg=#mmd_cfg{}}).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 
-start_link() ->
-    gen_server:start_link(?MODULE, [], []).
+start_link(MaxChansPerSock) ->
+    gen_server:start_link(?MODULE, [MaxChansPerSock], []).
 
 trace(Pid) -> call(Pid,trace).
 notrace(Pid) -> call(Pid,notrace).
@@ -63,9 +68,9 @@ call(Pid,Term) -> gen_server:call(Pid,Term).
 %%% gen_server callbacks
 %%%===================================================================
 
-init([]) ->
+init([MaxChansPerSock]) ->
     process_flag(trap_exit,true),
-    {ok, #state{}}.
+    {ok, #state{chans = channel_mgr:new(MaxChansPerSock)}}.
 
 verifySocket(Socket) ->
 %    gen_tcp:send(Socket,?CODEC_VERSION),

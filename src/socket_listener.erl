@@ -16,10 +16,9 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/1]).
--export([start_link/0]).
+-export([start_link/2]).
 
--export([accept/2]).  %Need to export so we can reload this code
+-export([accept/3]).  %Need to export so we can reload this code
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -30,7 +29,7 @@
 
 -define(SERVER, ?MODULE). 
 
--record(state, {lsock,acceptor}).
+-record(state, {lsock, acceptor, max_chans_per_sock}).
 
 -define(LISTEN_OPTS, 
         [{active,false},
@@ -44,19 +43,21 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
-start_link() -> start_link(0).
-start_link(Port) ->
-    gen_server:start_link(?MODULE, [Port], []).
+start_link(Port, MaxChansPerSock) ->
+    gen_server:start_link(?MODULE, [Port, MaxChansPerSock], []).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 
-init([Port]) -> 
+init([Port, MaxChansPerSock]) ->
     {ok,LSock} = gen_tcp:listen(Port,?LISTEN_OPTS),
     ?linfo("Listening on: ~s",[p6str:local_sock_to_str(LSock)]),
-    Acceptor = proc_lib:spawn_link(fun() -> accept(self(),LSock) end),
-    {ok,#state{lsock=LSock,acceptor=Acceptor}}.
+    Acceptor = proc_lib:spawn_link(
+		 fun() -> accept(self(), LSock, MaxChansPerSock) end),
+    {ok,#state{lsock=LSock,
+	       acceptor=Acceptor,
+	       max_chans_per_sock=MaxChansPerSock}}.
 
 handle_call(Request, From, State) ->
     ?linfo("Unexpected handle_call(~p, ~p, ~p)",[Request,From,State]),
@@ -79,9 +80,9 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-accept(Server,LSock) ->
+accept(Server, LSock, MaxChansPerSock) ->
     {ok,Sock} = gen_tcp:accept(LSock),
-    socket_handlers:createHandler(Sock),
-    ?MODULE:accept(Server,LSock).
+    socket_handlers:createHandler(Sock, MaxChansPerSock),
+    ?MODULE:accept(Server,LSock, MaxChansPerSock).
 
 %% vim: ts=4:sts=4:sw=4:et:sta:
