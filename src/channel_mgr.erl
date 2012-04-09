@@ -19,79 +19,82 @@
 -export([sendAll/2]).
 -export([refToIds/2, removeRef/2]).
 
-new() -> ets:new(channel_mgr, [set]).
+-record(state, {tid}).
+-define(tid(S), S#state.tid).
 
-sendAll(Chans,Body) ->
-    ets:foldl(fun({Id, Ref}, C) ->
+new() -> #state{tid = ets:new(channel_mgr, [set])}.
+
+sendAll(State, Body) ->
+    ets:foldl(fun({Id, Ref}, S) ->
 		      fire(Ref,#channel_message{id=Id,body=Body}),
-		      C
-	      end, Chans, Chans).
+		      S
+	      end, State, ?tid(State)).
 
-handleExit(Chans,Pid,_Reason) ->
-    lists:foreach(fun(Id) -> unexpectedClose(Id) end, refToIds(Chans, Pid)),
-    Chans.
+handleExit(State, Pid, _Reason) ->
+    lists:foreach(fun(Id) -> unexpectedClose(Id) end, refToIds(State, Pid)),
+    State.
 
 %% a local create_channel will spawn a channel process that will
 %% dispatch the message for us.
-processOut(Chans,M) -> processOut(Chans,M,undefined).
-processOut(Chans,M=#channel_create{id=Id},Cfg) ->
-    case ets:member(Chans, Id) of
-        true -> {Chans,dupId(Id)};
+processOut(State, M) -> processOut(State, M, undefined).
+processOut(State, M=#channel_create{id=Id}, Cfg) ->
+    case ets:member(?tid(State), Id) of
+        true -> {State, dupId(Id)};
         false ->
-            case ets:info(Chans, size) of
-                N when N > ?MAX_CONCURRENT_CHANNELS -> {Chans,maxChans(Id,N)};
+            case ets:info(?tid(State), size) of
+                N when N > ?MAX_CONCURRENT_CHANNELS -> {State, maxChans(Id,N)};
                 _ ->
                     {ok,Pid} = client_channel:new(self(),M,Cfg),
-		    ets:insert(Chans, {Id, Pid}),
-                    {Chans, []}
+		    ets:insert(?tid(State), {Id, Pid}),
+                    {State, []}
             end
     end;
 
-processOut(Chans,M=#channel_message{id=Id},_Cfg) ->
-    case ets:lookup_element(Chans, Id, 2) of
-        badarg -> {Chans,noSuchChannel(Id)};
+processOut(State, M=#channel_message{id=Id},_Cfg) ->
+    case ets:lookup_element(?tid(State), Id, 2) of
+        badarg -> {State, noSuchChannel(Id)};
         Pid -> fire(Pid,M),
-	       {Chans, []}
+	       {State, []}
     end;
 
-processOut(Chans,M=#channel_close{id=Id},_Cfg) ->
-    case ets:lookup_element(Chans, Id, 2) of
+processOut(State,M=#channel_close{id=Id},_Cfg) ->
+    case ets:lookup_element(?tid(State), Id, 2) of
         badarg ->
             ?lwarn("Attempt to close unknown channel: ~p",[Id]),
-            {Chans,noSuchChannel(Id)};
+            {State, noSuchChannel(Id)};
         Pid -> fire(Pid, M),
-	       ets:delete(Chans, Id),
-               {Chans, []}
+	       ets:delete(?tid(State), Id),
+               {State, []}
     end.
 
-processIn(Chans,From,M=#channel_create{id=Id}) ->
-    case ets:member(Chans, Id) of
-        false -> ets:insert(Chans, {Id, From}),
-		 {Chans, M};
+processIn(State, From,M=#channel_create{id=Id}) ->
+    case ets:member(?tid(State), Id) of
+        false -> ets:insert(?tid(State), {Id, From}),
+		 {State, M};
         true -> dupId(From,Id),
-                Chans
+                State
     end;
 
-processIn(Chans,From,M=#channel_message{id=Id}) ->
-    case ets:member(Chans, Id) of
+processIn(State, From, M=#channel_message{id=Id}) ->
+    case ets:member(?tid(State), Id) of
         false ->
             ?lwarn("Unknown channel: ~p from: ~p",[Id,From]),
-            Chans;
-        true -> {Chans,M}
+            State;
+        true -> {State, M}
     end;
-processIn(Chans,_From,M=#channel_close{id=Id}) ->
-    ets:delete(Chans, Id),
-    {Chans, M}.
+processIn(State,_From,M=#channel_close{id=Id}) ->
+    ets:delete(?tid(State), Id),
+    {State, M}.
 
 fire(To,Msg) -> fire(self(),To,Msg).
 fire(From,To,Msg) -> To ! {mmd,From,Msg}.
 
-refToIds(Chans, Ref) ->
-    ets:select(Chans, [{{'$1', Ref}, [], ['$1']}]).
+refToIds(State, Ref) ->
+    ets:select(?tid(State), [{{'$1', Ref}, [], ['$1']}]).
 
-removeRef(Chans, Ref) ->
-    ets:match_delete(Chans, [{'_', Ref}]),
-    Chans.
+removeRef(State, Ref) ->
+    ets:match_delete(?tid(State), [{'_', Ref}]),
+    State.
 
 maxChans(Id,_N) -> err(Id,?INVALID_CHANNEL,"Maximum channels per connection (~p) reached",[?MAX_CONCURRENT_CHANNELS]).
 
