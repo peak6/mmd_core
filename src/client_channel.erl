@@ -153,7 +153,12 @@ initChannel(Create=#create{owner=Owner,msg=CC=#channel_create{id=Id,service=Svc}
 
 initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{service=Svc,id=Id}}) ->
     case services:findBalanced(Svc) of
-        {ok,Entries} ->
+        [] ->
+            fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_NOT_FOUND,"Service '~p' not found.",[Svc])}),
+            unlink(Owner),
+            ?linfo("~p asked for non-existant service: ~p",[Owner,Svc]),
+            {stop,normal,nostate};
+        Entries ->
             case fire(Entries,CC) of
                 {ok,Pid} ->
                     link(Pid),
@@ -171,17 +176,7 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{serv
                 {error,retry} -> nextTimeout(Create);
                 Other -> ?lwarn("Failed to create channel, reason: ~p, targets: ~p",[Other,Entries]),
                          nextTimeout(Create)
-            end;
-        {error,not_found} ->
-            fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_NOT_FOUND,"Service '~p' not found.",[Svc])}),
-            unlink(Owner),
-            ?linfo("~p asked for non-existant service: ~p",[Owner,Svc]),
-            {stop,normal,nostate};
-        Error ->
-            fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_NOT_FOUND,"Service '~p' not found.",[Svc])}),
-            ?linfo("Error retrieving service: ~p, reason: ~p",[Svc,Error]),
-            unlink(Owner),
-            {stop,normal,nostate}
+            end
     end.
 
 fire([],_Msg) ->

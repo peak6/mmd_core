@@ -89,10 +89,9 @@ find(Name) -> p6dmap:getWithDM(?P6DMAP,p6str:mkatom(Name)).
 
 findBalanced(Name) ->
     case find(Name) of
-        [] -> {error,not_found};
-        [A] -> {ok,A};
-        List ->
-            balance(List)
+        [] -> [];
+        [A] -> [A];
+        List -> balance(List)
     end.
 
 regProxy({T,Mod},Names) when is_list(Names) ->
@@ -239,14 +238,14 @@ mapFree(_NoMatch,_MinDataCenter,_TotalFree,_Acc) ->
 
 balance(List) ->
     case mapFree(List) of
-        fail -> {ok,lists:sort(fun([_,_,L1],[_,_,L2]) -> L1 < L2 end, List)};
+        fail -> lists:sort(fun([_,_,L1],[_,_,L2]) -> L1 < L2 end, List);
         {_Total,[{_,Entry}]} ->
-            {ok,Entry};
+            [Entry];
         {Total,Entries} ->
             Rand = random_service:uniform(trunc(Total)),
             E = walkUntil(Rand,Entries),
 %%            ?ldebug("Balance of\nFree: ~p, Rand: ~p, Selected: ~p\nEntries: ~w",[Total,Rand,E,Entries]),
-            {ok,[E]}
+            [E]
     end.
 
 walkUntil(_Num,[{_N,Entry}]) -> Entry;  % rand is trunc'd total, so may kenobi on us, this catches that
