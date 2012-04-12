@@ -9,7 +9,7 @@
 -define(WATCHERS,service_watchers).
 -define(P6DMAP,service_map).
 
--record(state, {known=sets:new()}).
+-record(state, {known=sets:new(), chans=channel_mgr:new()}).
 
 xformEntryAdd(E=#dm{val={SL,HL},node=Node}) ->
     W = service_node_weight:getNodeWeight(Node),
@@ -111,7 +111,6 @@ registerConfigured() ->
 
 
 init([]) ->
-    p6pg:start_link(?WATCHERS),
     p6dmap:new(?P6DMAP,?MODULE),
     regLocal(?MODULE),
     registerConfigured(),
@@ -127,13 +126,6 @@ code_change(_OldVsn, State, _Extra) ->
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-                                                % helpers
-broadcast(Body) ->
-    lists:foreach(fun ({Pid,ChanId}) ->
-			  M = #channel_message{id=ChanId, body=Body},
-			  mmd_msg:dispatch(Pid, M)
-		  end,
-		  p6pg:memberData(?WATCHERS)).
 
 %% Channel Messages
 
@@ -168,15 +160,21 @@ handle_call({mmd, From, CC=#channel_create{type=call,body=SvcPattern}}, _From, S
     mmd_msg:reply(From, CC, Ret),
     {reply,ok,State};
 
-handle_call({mmd, From, CC=#channel_create{type=sub, id=Id}}, _From, State) ->
-    All = dispatchDiff(State),
-    mmd_msg:reply(From, CC, ?map([{added,?array(sets:to_list(All))}])),
-    ok = p6pg:add(?WATCHERS,From,Id),
-    {reply, ok, State#state{known=All}};
+handle_call({mmd, From, CC=#channel_create{type=sub}}, _From,
+	    State=#state{chans=Chans}) ->
+    case channel_mgr:processIn(Chans, From, CC) of
+        {NewChans, _Msg} ->
+	    All = dispatchDiff(State),
+	    mmd_msg:reply(From, CC, ?map([{added, ?array(sets:to_list(All))}])),
+	    {reply, ok, State#state{known=All, chans=NewChans}};
+        NewChans ->
+	    {reply, ok, State#state{chans=NewChans}}
+    end;
 
-handle_call({mmd, _MMDFrom, #channel_close{}}, _GSFrom, State) ->
-    %% Auto-removed by p6pg whent he channel dies
-    {reply,ok, State};
+handle_call({mmd, From, M=#channel_close{}}, _From,
+	    State=#state{chans=Chans}) ->
+    {NewChans, _Msg} = channel_mgr:processIn(Chans, From, M),
+    {reply, ok, State#state{chans=NewChans}};
 
 handle_call(Request, From, State) ->
     ?linfo("Unexpected call: ~p from: ~p, with state: ~p",[Request,From,State]),
@@ -187,12 +185,16 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 
-dispatchDiff(State) ->
+dispatchDiff(State=#state{chans=Chans}) ->
     case calcDiff(State) of
-        {All,[],[]} -> ok;
-        {All,Add,[]} -> broadcast(?map([{added,?array(Add)}]));
-        {All,[],Rem} -> broadcast(?map([{removed,?array(Rem)}]));
-        {All,Add,Rem} -> broadcast(?map([{added,?array(Add)},{removed,?array(Rem)}]))
+        {All, [], []} -> ok;
+        {All, Add, []} ->
+	    channel_mgr:sendAll(Chans, ?map([{added, ?array(Add)}]));
+        {All, [], Rem} ->
+	    channel_mgr:sendAll(Chans, ?map([{removed, ?array(Rem)}]));
+        {All, Add, Rem} ->
+	    channel_mgr:sendAll(
+	      Chans, ?map([{added, ?array(Add)}, {removed,?array(Rem)}]))
     end,
     All.
 
