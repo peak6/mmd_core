@@ -204,24 +204,24 @@ handle_info({'DOWN', _Ref, process, Pid, Reason}, State=#state{sock=Sock}) ->
     ?linfo("Pid went down, closing all it's connections: pid=~p, reason=~p",
 	   [Pid, Reason]),
     State2 =
-	list:foldl(fun (SvcName, StateN) ->
-			   %% we don't bother setting up to handle the ack
-			   M=#channel_create{
-			     id=p6uuid:next(),
-			     service = <<"serviceregistry">>,
-			     type=$C,
-			     body={'$map', [{<<"unregister">>, SvcName}]}},
-			   ok=gen_tcp:send(Sock, mmd_encode:encode_message(M)),
-			   svc_rm(StateN, SvcName)
-		   end, State, pid_svcs(State, Pid)),
+	lists:foldl(fun (SvcName, StateN) ->
+			    %% we don't bother setting up to handle the ack
+			    M=#channel_create{
+			      id=p6uuid:next(),
+			      service = <<"serviceregistry">>,
+			      type=$C,
+			      body={'$map', [{<<"unregister">>, SvcName}]}},
+			    ok=gen_tcp:send(Sock, mmd_encode:encode_message(M)),
+			    svc_rm(StateN, SvcName)
+		    end, State, pid_svcs(State, Pid)),
     State3 =
-	list:foldl(fun (Id, StateN) ->
-			   Err = ?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,
-					<<"Unexpected remote channel close">>),
-			   M=#channel_close{id=Id, body=Err},
-			   ok=gen_tcp:send(Sock, mmd_encode:encode_message(M)),
-			   chan_rm(StateN, Id)
-		   end, State2, pid_chans(State2, Pid)),
+	lists:foldl(fun (Id, StateN) ->
+			    Err = ?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,
+					 <<"Unexpected remote channel close">>),
+			    M=#channel_close{id=Id, body=Err},
+			    ok=gen_tcp:send(Sock, mmd_encode:encode_message(M)),
+			    chan_rm(StateN, Id)
+		    end, State2, pid_chans(State2, Pid)),
     {noreply, State3};
 handle_info(Info, State) ->
     ?lwarn("Unexpected handle_info(~p, ~p)",[Info, State]),
