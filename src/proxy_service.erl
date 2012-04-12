@@ -19,6 +19,31 @@
 %%% @end
 %%% Created : Tue Jul 07 08:43:30 CDT 2011
 %%%-------------------------------------------------------------------
+
+%% The proxy server uses mmd_tcp_client to connect to a remote mmd
+%% server and exposes all the locally available services to the remote
+%% mmd.
+%%
+%% To set this up, you'll want to add something like the following to
+%% your config (replacing with your own names):
+%%
+%%   {set, mmd_core,
+%%    [
+%%     ...
+%%     {mmd_tcp_clients, [{remote_mmd, "remote.name.com", 9999}]},
+%%     {proxies, [{remote_proxy, remote_mmd}]},
+%%     ...
+%%
+%% Now all the services that are available locally will be exposed on
+%% "remote.name.com"'s mmd (and any connected mmd nodes) prefixed with
+%% "remote_proxy".
+%%
+%% For example, you can now do:
+%%
+%%     > c = pymmd.connect()
+%%     > c.remote_proxy.echo("Hello World!")
+%%     MMDChannelClose(..., body='Hello World!')
+
 -module(proxy_service).
 
 -export([start_link/2]).
