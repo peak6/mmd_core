@@ -65,10 +65,12 @@ handle_call({mmd, From, Msg}, _From, Chans) ->
 	 {NewChans, #channel_create{type=sub}} ->
 	     NewChans;
 	 {NewChans, CM=#channel_message{}} ->
-	     channel_mgr:processOut(
-	       NewChans,
-	       mmd_msg:mkError(CM, ?INVALID_REQUEST,
-			       <<"Sub doesn't accept channel message">>));
+	     {Chans2, _M} =
+		 channel_mgr:processOut(
+		   NewChans,
+		   mmd_msg:mkError(CM, ?INVALID_REQUEST,
+				   <<"Sub doesn't accept channel message">>)),
+	     Chans2;
 	 {NewChans, #channel_close{}} ->
 	     NewChans
      end};
