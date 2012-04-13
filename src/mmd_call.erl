@@ -21,10 +21,7 @@ call(CC=#channel_create{id=Chan,timeout=Timeout}) ->
                    gen_server:reply(GSRef,ok),
                    {ok,Body};
                ?DOWN(Ref,CCPid,Reason) ->
-                   {error,Reason};
-               Other ->
-                   ?lwarn("Unexpected: ~p",[Other]),
-                   {error,Other}
+                   {error,Reason}
            after Timeout ->
                    {error,timeout}
            end,
