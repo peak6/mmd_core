@@ -175,7 +175,8 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{serv
                     {noreply,#state{owner=Owner,remote=Pid,id=Id,type=client,svc=Svc}};
                 {error,retry} -> nextTimeout(Create);
                 Other -> ?lwarn("Failed to create channel, reason: ~p, targets: ~p",[Other,Entries]),
-                         nextTimeout(Create)
+                         fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_ERROR,"Service '~p' failure: ~p",[Svc,Other])}),
+                         {stop,normal,nostate}
             end
     end.
 
@@ -191,10 +192,9 @@ fire([[_,Pid,_]|Pids], M)->
                     {error,bad_service}
             end;
         {error,retry} ->
-            %%?lwarn("Selected pid in ack wait: ~p",[Pid]),
             fire(Pids,M);
-        Other -> ?lwarn("Failed to dispatch to: ~p, reason: ~p",[Pid,Other]),
-                 fire(Pids,M)
+        Other -> ?lwarn("Aborting request, failed to dispatch ~p to: ~p, reason: ~p",[M,Pid,Other]),
+		 {error,service_failed}
     end;
 
 fire(undefined,M) -> ?lerr("Unable to send message to 'undefined': ~p",[M]),
