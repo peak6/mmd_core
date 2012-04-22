@@ -167,15 +167,36 @@ handle_call({mmd, From, CC=#channel_create{type=call,body=SvcPattern}}, _From, S
     end,
     {reply,ok,State};
 
-handle_call({mmd, From, CC=#channel_create{type=sub}}, _From,
+handle_call({mmd, From, CC=#channel_create{type=sub, body=SvcPattern}}, _From,
 	    State=#state{chans=Chans}) ->
-    case channel_mgr:processIn(Chans, From, CC) of
-        {NewChans, _Msg} ->
-	    All = dispatchDiff(State),
-	    mmd_msg:reply(From, CC, ?map([{added, ?array(sets:to_list(All))}])),
-	    {reply, ok, State#state{known=All, chans=NewChans}};
-        NewChans ->
-	    {reply, ok, State#state{chans=NewChans}}
+    case case SvcPattern of
+	     undefined -> re:compile("");
+	     <<?NULL>> -> re:compile("");
+	     _ -> re:compile(SvcPattern)
+	 end of
+	{ok, MP} ->
+	    case channel_mgr:processIn(Chans, From, CC, MP) of
+		{NewChans, _Msg} ->
+		    All = dispatchDiff(State),
+		    Filtered =
+			sets:fold(fun (Svc, Svcs) ->
+					  case re:run(p6str:mkbin(Svc), MP) of
+					      nomatch -> Svcs;
+					      _ -> [Svc | Svcs]
+					  end
+				  end,
+				  [],
+				  All),
+		    mmd_msg:reply(From, CC, ?map([{added, ?array(Filtered)}])),
+		    {reply, ok, State#state{known=All, chans=NewChans}};
+		NewChans ->
+		    {reply, ok, State#state{chans=NewChans}}
+	    end;
+	{error, {ErrString, Pos}} ->
+	    mmd_msg:error(From, CC, ?INVALID_REQUEST,
+			  "Failed to compile regex: reason: ~p, "
+			  "pos: ~p, regex: ~p", [ErrString, Pos, SvcPattern]),
+	    {reply, ok, State}
     end;
 
 handle_call({mmd, From, M=#channel_close{}}, _From,
@@ -191,18 +212,25 @@ handle_cast(Msg, State) ->
     ?linfo("Unexpected cast: ~p, with state: ~p",[Msg,State]),
     {noreply, State}.
 
+re_filter(MP, Es) -> re_filter(MP, Es, []).
+re_filter(_MP, [], Acc) -> Acc;
+re_filter(MP, [E | Es], Acc) ->
+    case re:run(p6str:mkbin(E), MP) of
+	nomatch -> re_filter(MP, Es, Acc);
+	_ -> re_filter(MP, Es, [E | Acc])
+    end.
 
 dispatchDiff(State=#state{chans=Chans}) ->
-    case calcDiff(State) of
-        {All, [], []} -> ok;
-        {All, Add, []} ->
-	    channel_mgr:sendAll(Chans, ?map([{added, ?array(Add)}]));
-        {All, [], Rem} ->
-	    channel_mgr:sendAll(Chans, ?map([{removed, ?array(Rem)}]));
-        {All, Add, Rem} ->
-	    channel_mgr:sendAll(
-	      Chans, ?map([{added, ?array(Add)}, {removed,?array(Rem)}]))
-    end,
+    {All, Add, Rm} = calcDiff(State),
+    channel_mgr:send_all_matching(
+      fun (MP) ->
+	      case {re_filter(MP, Add), re_filter(MP, Rm)} of
+		  {[], []} -> false;
+		  {A, []} -> {true, ?map([{added, ?array(A)}])};
+		  {[], R} -> {true, ?map([{removed, ?array(R)}])};
+		  {A, R} -> ?map([{added, ?array(A)}, {removed,?array(R)}])
+	      end
+      end, Chans),
     All.
 
 -spec(calcDiff(State::#state{}) -> {All::set, Added::list(), Removed::list()}).
