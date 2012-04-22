@@ -15,7 +15,8 @@
 -include("mmd.hrl").
 -include_lib("p6core/include/logger.hrl").
 -export([new/0, new/1]).
--export([handleExit/3,processOut/2,processOut/3,processIn/3]).
+-export([handleExit/3, processOut/2, processOut/3, processOut/4]).
+-export([processIn/3, processIn/4]).
 -export([sendAll/2]).
 -export([refToIds/2, removeRef/2]).
 
@@ -23,7 +24,7 @@
 -define(tid(S), S#state.tid).
 -define(max_chans(S), S#state.max_chans).
 
--record(chan, {id, remote}).
+-record(chan, {id, remote, data}).
 
 new() -> new(?MAX_CONCURRENT_CHANNELS).
 new(MaxChans) -> #state{tid = ets:new(channel_mgr, [set, {keypos, 2}]),
@@ -42,25 +43,27 @@ handleExit(State, Pid, _Reason) ->
 %% a local create_channel will spawn a channel process that will
 %% dispatch the message for us.
 processOut(State, M) -> processOut(State, M, undefined).
-processOut(State, M=#channel_create{id=Id}, Cfg) ->
+processOut(State, M, Cfg) -> processOut(State, M, Cfg, undefined).
+processOut(State, M=#channel_create{id=Id}, Cfg, Data) ->
     case ets:info(?tid(State), size) > ?max_chans(State) of
 	true -> {State, maxChans(Id, ?max_chans(State))};
 	false ->
 	    {ok,Pid} = client_channel:new(self(),M,Cfg),
-	    case ets:insert_new(?tid(State), #chan{id = Id, remote = Pid}) of
+	    case ets:insert_new(?tid(State),
+				#chan{id = Id, remote = Pid, data = Data}) of
 		true -> {State, []};
 		false -> {State, dupId(Id)}
 	    end
     end;
 
-processOut(State, M=#channel_message{id=Id},_Cfg) ->
+processOut(State, M=#channel_message{id=Id}, _Cfg, _Data) ->
     case ets:lookup_element(?tid(State), Id, 3) of
         badarg -> {State, noSuchChannel(Id)};
         Pid -> fire(Pid,M),
 	       {State, []}
     end;
 
-processOut(State,M=#channel_close{id=Id},_Cfg) ->
+processOut(State, M=#channel_close{id=Id}, _Cfg, _Data) ->
     case ets:lookup_element(?tid(State), Id, 3) of
         badarg ->
             ?lwarn("Attempt to close unknown channel: ~p",[Id]),
@@ -70,21 +73,23 @@ processOut(State,M=#channel_close{id=Id},_Cfg) ->
                {State, []}
     end.
 
-processIn(State, From,M=#channel_create{id=Id}) ->
-    case ets:insert_new(?tid(State), #chan{id = Id, remote = From}) of
+processIn(State, From, M) -> processIn(State, From, M, undefined).
+processIn(State, From, M=#channel_create{id=Id}, Data) ->
+    case ets:insert_new(?tid(State),
+			#chan{id = Id, remote = From, data=Data}) of
         true -> {State, M};
         false -> dupId(From,Id),
                 State
     end;
 
-processIn(State, From, M=#channel_message{id=Id}) ->
+processIn(State, From, M=#channel_message{id=Id}, _Data) ->
     case ets:member(?tid(State), Id) of
         false ->
             ?lwarn("Unknown channel: ~p from: ~p",[Id,From]),
             State;
         true -> {State, M}
     end;
-processIn(State,_From,M=#channel_close{id=Id}) ->
+processIn(State,_From,M=#channel_close{id=Id}, _Data) ->
     ets:delete(?tid(State), Id),
     {State, M}.
 
