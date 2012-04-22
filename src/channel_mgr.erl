@@ -17,7 +17,7 @@
 -export([new/0, new/1]).
 -export([handleExit/3, processOut/2, processOut/3, processOut/4]).
 -export([processIn/3, processIn/4]).
--export([sendAll/2]).
+-export([sendAll/2, send_all_matching/2]).
 -export([refToIds/2, removeRef/2]).
 
 -record(state, {tid, max_chans}).
@@ -33,6 +33,17 @@ new(MaxChans) -> #state{tid = ets:new(channel_mgr, [set, {keypos, 2}]),
 sendAll(State, Body) ->
     ets:foldl(fun(#chan{id = Id, remote = Ref}, S) ->
 		      fire(Ref,#channel_message{id=Id,body=Body}),
+		      S
+	      end, State, ?tid(State)).
+
+send_all_matching(F, State) ->
+    ets:foldl(fun(#chan{id = Id, remote = Ref, data = Data}, S) ->
+		      case F(Data) of
+			  {true, Body} ->
+			      fire(Ref, #channel_message{id=Id, body=Body});
+			  false ->
+			      ok
+		      end,
 		      S
 	      end, State, ?tid(State)).
 
