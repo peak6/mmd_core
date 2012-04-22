@@ -148,16 +148,23 @@ handle_call({mmd, From, CC=#channel_create{type=call,body=undefined}}, _From, St
     {reply, ok, State};
 
 handle_call({mmd, From, CC=#channel_create{type=call,body=SvcPattern}}, _From, State) ->
-    Ret = lists:foldl(fun(Svc,Acc) ->
-			      SB = p6str:mkbin(Svc),
-			      case re:run(SB,SvcPattern) of
-				  nomatch -> Acc;
-				  _ -> [SB|Acc]
-			      end
-		      end,
-		      [],
-		      allServiceNames()),
-    mmd_msg:reply(From, CC, Ret),
+    case re:compile(SvcPattern) of
+	{ok, MP} ->
+	    Ret = lists:foldl(fun(Svc,Acc) ->
+				      SB = p6str:mkbin(Svc),
+				      case re:run(SB, MP) of
+					  nomatch -> Acc;
+					  _ -> [SB|Acc]
+				      end
+			      end,
+			      [],
+			      allServiceNames()),
+	    mmd_msg:reply(From, CC, Ret);
+	{error, {ErrString, Pos}} ->
+	    mmd_msg:error(From, CC, ?INVALID_REQUEST,
+			  "Failed to compile regex: reason: ~p, "
+			  "pos: ~p, regex: ~p", [ErrString, Pos, SvcPattern])
+    end,
     {reply,ok,State};
 
 handle_call({mmd, From, CC=#channel_create{type=sub}}, _From,
