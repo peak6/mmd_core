@@ -148,7 +148,10 @@ handle_call({mmd, From, CC=#channel_create{type=call,body=undefined}}, _From, St
     {reply, ok, State};
 
 handle_call({mmd, From, CC=#channel_create{type=call,body=SvcPattern}}, _From, State) ->
-    {Str, _Rst} = mmd_decode:decode(SvcPattern),
+    Str = case mmd_decode:decode(SvcPattern) of
+	      {S, _Rst} -> S;
+	      S -> S
+	  end,
     case re:compile(Str) of
 	{ok, MP} ->
 	    Ret = lists:foldl(fun(Svc,Acc) ->
@@ -172,7 +175,9 @@ handle_call({mmd, From, CC=#channel_create{type=sub, body=SvcPattern}}, _From,
 	    State=#state{chans=Chans}) ->
     case case mmd_decode:decode(SvcPattern) of
 	     {nil, _Rst} -> re:compile("");
-	     {Str, _Rst} -> re:compile(Str)
+	     {Str, _Rst} -> re:compile(Str);
+	     undefined -> re:compoile("");
+	     S -> re:compile(S)
 	 end of
 	{ok, MP} ->
 	    case channel_mgr:processIn(Chans, From, CC, MP) of
