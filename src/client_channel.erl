@@ -184,9 +184,9 @@ fire([],_Msg) ->
     {error,all_bad};
 fire([[_,Pid,_]|Pids], M)->
     case fire(Pid,M) of
-        {ok,Pid} ->
-            case catch link(Pid) of
-                true -> {ok,Pid};
+        {ok, NewPid} ->
+            case catch link(NewPid) of
+                true -> {ok, NewPid};
                 {'EXIT',{noproc,_}} ->
                     ?lwarn("Channel created but process died before linking: ~p",[Pid]),
                     {error,bad_service}
