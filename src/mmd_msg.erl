@@ -49,6 +49,8 @@ mkError(#channel_message{id=Id},Code,Body) -> mkError(Id,Code,Body);
 mkError(#channel_create{id=Id},Code,Body) -> mkError(Id,Code,Body);
 mkError(Id,Code,Body) -> #channel_close{id=Id,body=?error(Code,Body)}.
 
+mkReply(Id,Body) when is_binary(Id) ->
+    #channel_message{id=Id,body=Body};
 mkReply(#channel_create{id=Id,type=call},Body) ->
     #channel_close{id=Id,body=Body};
 mkReply(#channel_create{id=Id},Body) ->

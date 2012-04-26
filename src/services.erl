@@ -98,7 +98,7 @@ regProxy({T,Mod},Names) when is_list(Names) ->
     regProxy(Mod,lists:map(fun(R={_,_}) -> R;
                               (N) -> {T,N} end,
                            Names));
-regProxy(Mod,Names) when is_list(Names) -> mmd_mod_proxy_sup:createProxy(Mod,Names);
+regProxy(Mod,Names) when is_list(Names) -> mmd_services_sup:add_service(Mod,Names);
 regProxy(Mod,Name) -> regProxy(Mod,[Name]).
 regProxy({Mod,Name}) -> regProxy(Mod,Name);
 regProxy(Mod) -> regProxy(Mod,[Mod]).
@@ -106,16 +106,16 @@ regProxy(Mod) -> regProxy(Mod,[Mod]).
 registerConfigured() ->
     case application:get_env(services) of
         undefined -> ok;
-        {ok,List} -> lists:foreach(fun(I)-> regProxy(I) end, List)
+        {ok,List} -> lists:foreach(fun(Svc)->regProxy(Svc) end, List)
     end.
 
 
 init([]) ->
     p6pg:start_link(?WATCHERS),
     p6dmap:new(?P6DMAP,?MODULE),
-    regLocal(?MODULE),
+ %%   regLocal(?MODULE),
     registerConfigured(),
-    timer:send_interval(500, update_svcs),
+%%    timer:send_interval(500, update_svcs),
     {ok, #state{}}.
 
 terminate(_Reason, _State) ->

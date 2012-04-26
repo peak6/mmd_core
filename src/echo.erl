@@ -16,33 +16,31 @@
 -include_lib("p6core/include/p6core.hrl").
 -include("mmd.hrl").
 
--export([handleCall/2,handleSubscribe/2,handleMessage/2,handleClose/2]).
+-export([service_call/2,
+	 service_subscribe/2,
+	 service_message/2,
+	 service_close/2
+%%	 ,handle_other/2
+	]).
+
 -behaviour(mmd_service).
 
-handleSubscribe(From,ChanCreate=#channel_create{id=Id,body=Body}) ->
-    ?linfo("Echo (subscribe): ~p / ~p",[Id,Body]),
-    mmd_msg:reply(From,ChanCreate,Body),
-    ok.
+service_subscribe(Client,CC=#channel_create{body=Body}) ->
+    ?ldebug("service_subscribe(~p,~p)",[Client,CC]),
+    reply(Body).
 
-handleCall(_From,_ChanCreate=#channel_create{body= <<"fail">>}) ->
-    exit({error,asked_to_fail});
-handleCall(From,ChanCreate=#channel_create{body=Body}) ->
-%%    ?linfo("Echo (call) --\n~p",[?DUMP_REC(channel_create,ChanCreate)]),
-    case application:get_env(esleep) of
-        undefined -> ok;
-        {ok,N} -> timer:sleep(N),
-             ?linfo("Replying after: ~p",[N])
-    end,
-    mmd_msg:reply(From,ChanCreate,Body),
-    ok.
+service_call(Client,CC=#channel_create{body=Body}) ->
+    ?ldebug("service_call(~p,~p)",[Client,CC]),
+    reply(Body).
 
-handleMessage(From,ChanMsg=#channel_message{id=Id,body=Body}) ->
-    ?linfo("Echo (msg): ~p / ~p",[Id,Body]),
-    mmd_msg:reply(From,ChanMsg,Body),
-    ok.
+service_message(CM=#channel_message{body=Body},_State) ->
+    ?ldebug("service_message(~p)",[CM]),
+    reply(Body).
 
-handleClose(_From,#channel_close{id=Id,body=Body}) ->
-    ?linfo("Echo (close): ~p / ~p",[Id,Body]),
-    ok.
+service_close(CC,State) ->
+    ?ldebug("service_close(~p,~p)",[CC,State]).
+    
+reply(<<"fail">>) -> exit({error,asked_to_fail});
+reply(Body) -> {reply,Body}.
 
 %% vim: ts=4:sts=4:sw=4:et:sta:

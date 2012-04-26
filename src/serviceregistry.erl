@@ -21,17 +21,32 @@
 %%%-------------------------------------------------------------------
 -module(serviceregistry).
 
--include_lib("p6core/include/logger.hrl").
 -include("mmd.hrl").
 -behavior(mmd_service).
 
--export([handleCall/2,handleClose/2]).
--export([handleSubscribe/2,handleMessage/2]).
+-export([service_call/2,
+	 service_subscribe/2,
+	 service_message/2,
+	 service_close/2,
+	 handle_other/2]).
 
 
-handleMessage(From,Msg) -> mmd_msg:notSupported(From,Msg).
-handleSubscribe(From,Msg) -> mmd_msg:notSupported(From,Msg).
-handleClose(From,Msg) ->  mmd_msg:notSupported(From,Msg).
+service_message(_Msg,_State) -> unsupported.
+service_subscribe(_Client,_Msg) -> unsupported.
+service_close(_Msg,_State) ->  unsupported.
+handle_other(_Other,_State) -> unsupported.
+
+service_call(_Client,#channel_create{originator=O, %% This is the ORIGIN of the call (ie: the socket)
+				     body=?map([{ActionBin, Value}])}) ->
+    Action = p6str:mkatom(ActionBin),
+    ?linfo("servicesregistry: call: action=~p, value=~p~n", [Action, Value]),
+    {reply,do_action(Action,O,Value)};
+service_call(_Client,#channel_create{originator=O,body=Body}) when is_binary(Body) ->
+    ?linfo("servicesregistry: call: ~p~n", [Body]),
+    case validateName(Body) of
+        ok -> {reply,services:regGlobal(O,p6str:mkatom(Body),0)};
+        Other -> {reply,?error(?INVALID_REQUEST,p6str:mkbin(Other))}
+    end.
 
 do_action(register, O, Name) ->
     case validateName(Name) of
@@ -53,19 +68,6 @@ do_action(unregister, O, Name) ->
     services:unregGlobal(O, p6str:mkatom(Name));
 do_action(_Action, _O, _Name) ->
     ?error(?INVALID_REQUEST, <<"Invalid action or invalid args for action">>).
-
-handleCall(From,CC=#channel_create{originator=O, %% This is the ORIGIN of the call (ie: the socket)
-				   body={'$map', [{ActionBin, Value}]}}) ->
-    Action = p6str:mkatom(ActionBin),
-    ?linfo("servicesregistry: call: action=~p, value=~p~n", [Action, Value]),
-    mmd_msg:reply(From, CC, do_action(Action, O, Value)),
-    ok;
-handleCall(From,CC=#channel_create{originator=O,body=Body}) when is_binary(Body) ->
-    ?linfo("servicesregistry: call: ~p~n", [Body]),
-    case validateName(Body) of
-        ok -> mmd_msg:reply(From,CC,services:regGlobal(O,p6str:mkatom(Body),0));
-        Other -> mmd_msg:reply(From,CC,?error(?INVALID_REQUEST,p6str:mkbin(Other)))
-    end.
 
 
 validateName(<<>>) -> {error,empty_name};

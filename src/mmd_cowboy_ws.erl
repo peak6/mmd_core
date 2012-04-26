@@ -32,7 +32,6 @@ terminate(_Req, _State) ->
     ok.
 
 format_addr({IP,Port}) -> p6str:ip_port_to_str(IP,Port).
-%%p6str:ip_port_to_str(okget:ok(Ws:get(peer_addr))
 
 websocket_init(_Any, Req, #htcfg{trace=Trace}) ->
     {ok,_Transport,Socket} = ?get(transport,Req), %% Not sure if this is a stable api

@@ -11,27 +11,25 @@
 %% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 %% See the License for the specific language governing permissions and
 %% limitations under the License.
--module(mmd_mod_proxy_sup).
+-module(mmd_services_sup).
 
 -behaviour(supervisor).
 
 %% API
 -export([start_link/0]).
--export([createProxy/2]).
-
-%% Supervisor callbacks
+-export([add_service/1, add_service/2]).
 -export([init/1]).
 
-%% Helper macro for declaring children of supervisor
--define(PROXY(Mod,Name), {Name, {mmd_mod_proxy, start_link, [Module,Names]}, permanent, 5000, worker, [mmd_mod_proxy]}).
-
-%% ===================================================================
-%% API functions
-%% ===================================================================
-createProxy(Module,Names) when is_list(Names) ->
-    supervisor:start_child(?MODULE,?PROXY(Module,Names));
-createProxy(Module,Name) -> createProxy(Module,[Name]).
-
+add_service(Mod) -> add_service(Mod,[Mod]).
+add_service(Mod,Names) ->
+    supervisor:start_child(?MODULE,
+			    {Mod,
+			     {mmd_service_acceptor,start_link,[Mod,Names]},
+			     permanent,
+			     5000,
+			     worker,
+			     [mmd_service_acceptor,Mod]
+			    }).
 
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
@@ -43,4 +41,3 @@ start_link() ->
 init([]) ->
     {ok, { {one_for_one, 5, 10}, [
                                  ]} }.
-
