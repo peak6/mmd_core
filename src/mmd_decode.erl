@@ -154,7 +154,7 @@ decode_type(atom,Bin) ->
     {Str,Rest} = decode_type(string,Bin),
     {binary_to_atom(Str,utf8),Rest};
 decode_type(uuid,<<UUID:16/binary,Rest/binary>>) ->
-    {?uuid(UUID),Rest};
+    {?uuid(list_to_binary(uuid:to_string(UUID))), Rest};
 decode_type(uuid_notag,<<UUID:16/binary,Rest/binary>>) ->
     {UUID,Rest};
 decode_type(secid,<<SecID:16/binary,Rest/binary>>) ->

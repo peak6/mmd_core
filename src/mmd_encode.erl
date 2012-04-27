@@ -97,8 +97,10 @@ encode_type(date,D) ->
     encode_svarint(D);
 encode_type(byte,B) ->
     B;
-encode_type(uuid,UUID) when is_binary(UUID) ->
+encode_type(uuid, <<UUID:16/binary>>) ->
     UUID;
+encode_type(uuid, <<UUID:36/binary>>) ->
+    p6uuid:parse(UUID);
 encode_type(secid,SecID) when is_binary(SecID) ->
     SecID;
 encode_type(bytes,Bytes) when is_binary(Bytes)->
