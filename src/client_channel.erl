@@ -83,6 +83,13 @@ handle_cast(Msg, State) ->
 prioritise_info(_Msg,_State) ->
     0.
 
+handle_info({'DOWN',_Ref,process,Remote,{undef,[{M,F,_,_}|_Ignore]}},#state{remote=Remote,owner=Owner,id=Id}) ->
+    fire(Owner,#channel_close{id=Id,
+			      body=?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,
+					  "Missing function: ~p:~p",[M,F])
+			     }),
+    {stop,normal,nostate};
+		    
 handle_info({'DOWN',_Ref,process,Remote,Reason},#state{remote=Remote,owner=Owner,id=Id}) ->
     fire(Owner,#channel_close{id=Id,
 			      body=?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,
