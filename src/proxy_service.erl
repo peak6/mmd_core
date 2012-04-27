@@ -101,7 +101,7 @@ init({Name, RemoteMmdName}) ->
 		chans=channel_mgr:new()}}.
 
 handle_call({mmd, From, M}, _From, State=#state{chans=Chans, mmd=Mmd}) ->
-    NewChans = case channel_mgr:processIn(Chans, From, M) of
+    NewChans = case channel_mgr:process_remote(Chans, From, M) of
 		   {Chans2, _} ->
 		       mmd_tcp_client:send(Mmd, M),
 		       Chans2;
@@ -123,7 +123,7 @@ handle_info({mmd_tcp_client, _Mmd, M}, State=#state{chans=Chans}) ->
 		 Msg#channel_create{service=strip_prefix(State, Svc)};
 	     Msg -> Msg
 	 end,
-    NC = case channel_mgr:processOut(Chans, M2) of
+    NC = case channel_mgr:process_local(Chans, M2) of
 	     {NewChans, []} -> NewChans;
 	     {NewChans, Other} -> ?linfo("Dunno what to do with: ~p", [Other]),
 				  NewChans

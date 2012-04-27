@@ -57,7 +57,7 @@ handle_call({setLoad,N},_From,State) ->
     {reply,ok,State};
 
 handle_call({mmd,From,Msg},_From,Chans) ->
-    case channel_mgr:processIn(Chans,From,Msg) of
+    case channel_mgr:process_remote(Chans,From,Msg) of
         {NewChans,Msg} -> {reply,ok,process(Msg,NewChans)}
 %%        NewChans -> {reply,ok,NewChans}
     end;
@@ -87,7 +87,7 @@ process(#channel_close{},Chans) ->
     Chans;
 process(Msg,Chans) ->
 %%    ?ldebug("Responding to: ~p",[Msg]),
-    case channel_mgr:processOut(Chans,mmd_msg:mkReply(Msg,mmd_msg:getBody(Msg))) of
+    case channel_mgr:process_local(Chans,mmd_msg:mkReply(Msg,mmd_msg:getBody(Msg))) of
         {NewChans,[]} -> NewChans;
         {NewChans,Other} ->
             ?linfo("Dunno what to do with: ~p",[Other]),

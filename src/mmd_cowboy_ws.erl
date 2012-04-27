@@ -8,6 +8,8 @@
 -include("mmd_cowboy_common.hrl").
 -record(state,{chans=channel_mgr:new(),trace=true,cfg=#mmd_cfg{}}).
 
+-define(DOWN,{'DOWN',_Ref,process,_Pid,_Reason}).
+
 -define(trc(State,Msg,Args), case State#state.trace of
 				 true -> ?ldebug(Msg,Args);
 				 _ -> ok
@@ -68,6 +70,17 @@ websocket_info({'$gen_call',Ref,Msg},Req,State) ->
 	    ?lerr("Bad return from handle_call(~p,~p,~p)\nResult: ~p",[Msg,Req,State,Other]),
 	    {Other,Req,State}
     end;
+websocket_info(Down=?DOWN,Req,State=#state{chans=Chans}) ->
+    case channel_mgr:process_down(Chans,Down) of
+	{ok,NewChans,Messages} ->
+	    jsreply(Messages,Req,State),
+	    {ok,Req,State#state{chans=NewChans}};
+	{error,Other} ->
+	    ?ldebug("proc down got: ~p",[Other]),
+	    {ok,Req,State,hibernate}
+    end;
+websocket_info({dispatch,Message},Req,State) ->
+    jsreply(Message,Req,State);
 
 %% Catch all to avoid blowing up socket
 websocket_info(_Info, Req, State) ->
@@ -94,7 +107,7 @@ handle_call(Other,Req,State) ->
     {reply,{error,{unsupported,Other}},Req,State}.
 
 process_mmd(Msg,From,Req,State=#state{chans=Chans}) ->
-    case channel_mgr:processIn(Chans,From,Msg) of
+    case channel_mgr:process_remote(Chans,From,Msg) of
         {NewChans,Dispatch} -> jsreply(Dispatch,Req,State#state{chans=NewChans});
         NewChans -> jsreply([],Req,State#state{chans=NewChans})
     end.
@@ -105,10 +118,13 @@ process_ws(#channel_create{id=Id,service='$mmd',body=?map(Map)}, Req,State=#stat
     jsreply(#channel_close{id=Id,body=ok},Req,State#state{cfg=NewMMDCfg});
 
 process_ws(Msg,Req,State=#state{chans=Chans,cfg=Cfg}) ->
-    {NewChans,ForMe} = channel_mgr:processOut(Chans,Msg,Cfg),
+    {NewChans,ForMe} = channel_mgr:process_local(Chans,Msg,Cfg),
     jsreply(ForMe,Req,State#state{chans=NewChans}).
 
 jsreply([],Req,State) -> {ok,Req,State,hibernate};
+jsreply(Messages,Req,State) when is_list(Messages) ->
+    lists:foreach(fun(M)-> self() ! {dispatch,M} end, Messages),
+    {noreply,Req,State};
 jsreply(Msg,Req,State) ->
     case catch json_encode:encode(Msg) of
         {ok,JSON} ->

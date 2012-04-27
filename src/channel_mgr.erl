@@ -15,19 +15,30 @@
 -include("mmd.hrl").
 -include_lib("p6core/include/logger.hrl").
 -export([new/0, new/1]).
--export([handleExit/3,processOut/2,processOut/3,processIn/3]).
--export([sendAll/2]).
+-export([handleExit/3, process_local/2, process_local/3, process_local/4]).
+-export([process_remote/3, process_remote/4]).
+-export([process_down/2]).
+-export([sendAll/2, send_all_matching/2]).
 -export([refToIds/2, removeRef/2]).
+-export([close_all/2]).
 
 -record(state, {tid, max_chans}).
 -define(tid(S), S#state.tid).
 -define(max_chans(S), S#state.max_chans).
 
--record(chan, {id, remote}).
+-record(chan, {id='_', remote='_', data='_', ref='_'}).
 
 new() -> new(?MAX_CONCURRENT_CHANNELS).
 new(MaxChans) -> #state{tid = ets:new(channel_mgr, [set, {keypos, 2}]),
 			max_chans = MaxChans}.
+
+close_all(State,Body) ->
+    ets:foldl(fun(#chan{id=Id,remote=Pid,ref=Ref},S) ->
+		      demonitor(Ref),
+		      fire(Pid,#channel_close{id=Id,body=Body}),
+		      S
+	      end, State, ?tid(State)),
+    ets:delete_all_objects(?tid(State)).
 
 sendAll(State, Body) ->
     ets:foldl(fun(#chan{id = Id, remote = Ref}, S) ->
@@ -35,58 +46,97 @@ sendAll(State, Body) ->
 		      S
 	      end, State, ?tid(State)).
 
+send_all_matching(F, State) ->
+    ets:foldl(fun(#chan{id = Id, remote = Ref, data = Data}, S) ->
+		      case F(Data) of
+			  {true, Body} ->
+			      fire(Ref, #channel_message{id=Id, body=Body});
+			  false ->
+			      ok
+		      end,
+		      S
+	      end, State, ?tid(State)).
+
 handleExit(State, Pid, _Reason) ->
     lists:foreach(fun(Id) -> unexpectedClose(Id) end, refToIds(State, Pid)),
     State.
 
-%% a local create_channel will spawn a channel process that will
+process_down(State,{'DOWN',_Ref,process,Pid,Reason}) ->
+    case ets:match(?tid(State),#chan{id='$1',remote=Pid}) of
+	[] -> {error,no_channels};
+	Channels ->
+	    {ok,State,lists:map(
+			fun([Id]) ->
+				?ldebug("Deleting: ~p",[Id]),
+				ets:delete(?tid(State),Id),
+				#channel_close{id=Id,body=?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,"Remote channel closed, reason: ~p",[Reason])}
+			end,
+			Channels)}
+    end.
+
+%% a local channel_create will spawn a channel process that will
 %% dispatch the message for us.
-processOut(State, M) -> processOut(State, M, undefined).
-processOut(State, M=#channel_create{id=Id}, Cfg) ->
+process_local(State, M) -> process_local(State, M, undefined).
+process_local(State, M, Cfg) -> process_local(State, M, Cfg, undefined).
+process_local(State, M=#channel_create{id=Id}, Cfg, Data) ->
     case ets:info(?tid(State), size) > ?max_chans(State) of
 	true -> {State, maxChans(Id, ?max_chans(State))};
 	false ->
 	    {ok,Pid} = client_channel:new(self(),M,Cfg),
-	    case ets:insert_new(?tid(State), #chan{id = Id, remote = Pid}) of
+	    Ref = monitor(process,Pid),
+	    case ets:insert_new(?tid(State),
+				#chan{id = Id, remote = Pid, data = Data, ref = Ref}) of
 		true -> {State, []};
-		false -> {State, dupId(Id)}
+		false ->
+		    demonitor(Ref,[flush]),
+		    {State, dupId(Id)}
 	    end
     end;
 
-processOut(State, M=#channel_message{id=Id},_Cfg) ->
+process_local(State, M=#channel_message{id=Id}, _Cfg, _Data) ->
     case ets:lookup_element(?tid(State), Id, 3) of
         badarg -> {State, noSuchChannel(Id)};
         Pid -> fire(Pid,M),
 	       {State, []}
     end;
 
-processOut(State,M=#channel_close{id=Id},_Cfg) ->
-    case ets:lookup_element(?tid(State), Id, 3) of
+process_local(State, M=#channel_close{id=Id}, _Cfg, _Data) ->
+    case ets:lookup(?tid(State),Id) of 
         badarg ->
             ?lwarn("Attempt to close unknown channel: ~p",[Id]),
             {State, noSuchChannel(Id)};
-        Pid -> fire(Pid, M),
-	       ets:delete(?tid(State), Id),
-               {State, []}
+	[#chan{remote=Pid,id=Id,ref=Ref}] ->
+	    demonitor(Ref,[flush]),
+	    fire(Pid,M),
+	    ets:delete(?tid(State),Id),
+	    {State,[]}
     end.
 
-processIn(State, From,M=#channel_create{id=Id}) ->
-    case ets:insert_new(?tid(State), #chan{id = Id, remote = From}) of
+process_remote(State, From, M) -> process_remote(State, From, M, undefined).
+process_remote(State, From, M=#channel_create{id=Id}, Data) ->
+    Ref = monitor(process,From),
+    case ets:insert_new(?tid(State),
+			#chan{id = Id, remote = From, data=Data,ref=Ref}) of
         true -> {State, M};
         false -> dupId(From,Id),
                 State
     end;
 
-processIn(State, From, M=#channel_message{id=Id}) ->
+process_remote(State, From, M=#channel_message{id=Id}, _Data) ->
     case ets:member(?tid(State), Id) of
         false ->
             ?lwarn("Unknown channel: ~p from: ~p",[Id,From]),
             State;
         true -> {State, M}
     end;
-processIn(State,_From,M=#channel_close{id=Id}) ->
-    ets:delete(?tid(State), Id),
-    {State, M}.
+process_remote(State,_From,M=#channel_close{id=Id}, _Data) ->
+    case ets:lookup(?tid(State),Id) of
+	[] -> {State,M};
+	[#chan{ref=Ref}] ->
+	    demonitor(Ref,[flush]),
+	    ets:delete(?tid(State), Id),
+	    {State, M}
+    end.
 
 fire(To,Msg) -> fire(self(),To,Msg).
 fire(From,To,Msg) -> To ! {mmd,From,Msg}.

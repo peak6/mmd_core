@@ -59,6 +59,8 @@
 
 -record(state,{mod,id,mod_state,client,create}).
 
+-define(df(M), mmd_decode:decodeFull(M)).
+
 behaviour_info(callbacks) -> [].
 %% If this were a behaivor, here are your methods
 %% {service_call,2},
@@ -76,20 +78,18 @@ start_link(Mod,From,Create) ->
     gen_server:start_link(?MODULE,[Mod,From,Create],[]).
 
 init([Mod,From,Create=#channel_create{id=Id}]) ->
-    link(From),
-    ?ldebug("Starting: from: ~p",[From]),
-%%    monitor(process,From),
+    monitor(process,From),
     self() ! ?CREATE_CHANNEL,
     {ok,#state{mod=Mod,id=Id,client=From,create=Create}}.
 
 %% Calls
 handle_info(?CREATE_CHANNEL,
-	    State=#state{create=CC=#channel_create{type=call,body=Body},
+	    State=#state{create=CC=#channel_create{type=call},
 			 mod=Mod,
 			 client=Client}) ->
     
     Result =  %% Map reply -> close since this is a call
-	case Mod:service_call(Client,CC) of %%do_apply(Mod,service_call,[Client,CC]) of
+	case Mod:service_call(Client,?df(CC)) of 
 	    {reply,Body,_} -> {close,Body};
 	    {reply,Body} -> {close,Body};
 	    Other -> Other
@@ -101,21 +101,22 @@ handle_info(?CREATE_CHANNEL,
 	    State=#state{create=CC=#channel_create{},
 			 mod=Mod,
 			 client=Client}) ->
-    process_result(State#state{create=undefined},apply(Mod,service_subscribe,[Client,CC]));
+    process_result(State#state{create=undefined},Mod:service_subscribe(Client,?df(CC)));
 
 handle_info({'DOWN',_Ref,process,Client,Reason},#state{client=Client,id=Id,mod=Mod,mod_state=ModState}) ->
     Mod:service_close(#channel_close{id=Id,body=?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,"Client terminated with: ~p",[Reason])},ModState),
     {stop,normal,nostate};
+
 handle_info(Info, State=#state{mod_state=ModState,mod=Mod}) ->
-    process_result(State,do_apply(Mod,handle_other,[Info,ModState])).
+    process_result(State,Mod:handle_other(Info,ModState)).
 
 handle_call({mmd,_From,CM=#channel_message{}},Ref,State=#state{mod=Mod,mod_state=ModState}) ->
     gen_server:reply(Ref,ok),
-    process_result(State,do_apply(Mod,service_message,[CM,ModState]));
+    process_result(State,Mod:service_message(?df(CM),ModState));
 
 handle_call({mmd,_From,CC=#channel_close{}},Ref,State=#state{mod=Mod,mod_state=ModState}) ->
     gen_server:reply(Ref,ok),
-    process_result(State,do_apply(Mod,service_close,[CC,ModState]));
+    process_result(State,Mod:service_close(?df(CC),ModState));
 
 handle_call(Msg,Ref,State) ->
     ?lwarn("Unexpected handle_call(~p, ~p, ~p)",[Msg,Ref,?DUMP_REC(state,State)]),
@@ -126,7 +127,6 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 terminate(_Reason, _State) ->
-    ?ldebug("Terminating: ~p",[_Reason]),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -176,26 +176,26 @@ process_result(State,Other) ->
 %% Captures missing methods in service.
 %% This is used to send a good error message to the user when a service doesn't
 %% support things like subsribe.
-do_apply(M,F,A) ->
-    try
-	apply(M,F,A)
-    catch
-	error:undef ->
-	    case erlang:get_stacktrace() of
-		[{M,F,_A,_File}|_Ignore] ->
-		    ?lwarn("Missing service handler: ~p:~p(~p)",[M,F,A]),
-		    {error,?INVALID_REQUEST,"Service does not support: ~p",[trans_method(F)]};
-		Stack ->
-		    {raise,error,undef,Stack}
-	    end;
-	Type:Reason ->
-	    {raise,Type,Reason,erlang:get_stacktrace()}
-    end.
+% do_apply(M,F,A) ->
+%     try
+% 	apply(M,F,A)
+%     catch
+% 	error:undef ->
+% 	    case erlang:get_stacktrace() of
+% 		[{M,F,_A,_File}|_Ignore] ->
+% 		    ?lwarn("Missing service handler: ~p:~p(~p)",[M,F,A]),
+% 		    {error,?INVALID_REQUEST,"Service does not support: ~p",[trans_method(F)]};
+% 		Stack ->
+% 		    {raise,error,undef,Stack}
+% 	    end;
+% 	Type:Reason ->
+% 	    {raise,Type,Reason,erlang:get_stacktrace()}
+%     end.
 
 
-%% Used to comp
-trans_method(service_call) -> call;
-trans_method(service_subscribe) -> subscribe;
-trans_method(service_message) -> message;
-trans_method(service_close) -> close;
-trans_method(Other) -> Other.
+% %% Used to comp
+% trans_method(service_call) -> call;
+% trans_method(service_subscribe) -> subscribe;
+% trans_method(service_message) -> message;
+% trans_method(service_close) -> close;
+% trans_method(Other) -> Other.

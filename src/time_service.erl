@@ -56,9 +56,9 @@ init([]) ->
     {ok, channel_mgr:new()}.
 
 handle_call({mmd,From,Msg}, _From, Chans) ->
-    case channel_mgr:processIn(Chans,From,Msg) of
+    case channel_mgr:process_remote(Chans,From,Msg) of
         {NewChans,CC=#channel_create{}} ->
-            {ReallyNew,[]} = channel_mgr:processOut(NewChans,mmd_msg:mkReply(CC,mkTime())),
+            {ReallyNew,[]} = channel_mgr:process_local(NewChans,mmd_msg:mkReply(CC,mkTime())),
             {reply,ok,ReallyNew};
         {NewChans,_} -> {reply,ok,NewChans};
         NewChans -> {reply,ok,NewChans}

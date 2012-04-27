@@ -38,6 +38,7 @@
 -include("mmd_cfg.hrl").
 
 -define(SERVER, ?MODULE).
+-define(DOWN,{'DOWN',_Ref,process,_Pid,_Reason}).
 
 -record(state, {socket,
 		chans=channel_mgr:new(),
@@ -69,7 +70,7 @@ call(Pid,Term) -> gen_server:call(Pid,Term).
 %%%===================================================================
 
 init([MaxChansPerSock]) ->
-    process_flag(trap_exit,true),
+%%    process_flag(trap_exit,true),
     {ok, #state{chans = channel_mgr:new(MaxChansPerSock)}}.
 
 verifySocket(Socket) ->
@@ -88,7 +89,7 @@ handle_call({mmd,_MMDFrom,#channel_create{id=Id}},_From,State=#state{ack=wait}) 
     {reply,{error,waiting_ack},State};
 handle_call({mmd,From,Msg=#channel_create{}},_From,State=#state{chans=Chans,ack=ready}) ->
     ?linfo("Entering ack wait"),
-    case channel_mgr:processIn(Chans,From,Msg) of
+    case channel_mgr:process_remote(Chans,From,Msg) of
         {NewChans,Dispatch} ->
             dispatch(Dispatch,State);
         NewChans -> ok
@@ -96,7 +97,7 @@ handle_call({mmd,From,Msg=#channel_create{}},_From,State=#state{chans=Chans,ack=
     {reply,ok,State#state{chans=NewChans,ack=wait}};
 
 handle_call({mmd,From,Msg},_From,State=#state{chans=Chans}) ->
-    case channel_mgr:processIn(Chans,From,Msg) of
+    case channel_mgr:process_remote(Chans,From,Msg) of
         {NewChans,Dispatch} ->
             dispatch(Dispatch,State);
         NewChans -> ok
@@ -157,19 +158,29 @@ handle_info({tcp,_,Data},State=#state{mmdCfg=MMDCfg,socket=Socket,chans=Chans,tr
         #channel_create{id=Id,service=Service,body=?raw(RawMap)} when Service == '$mmd'; Service == <<"$mmd">> ->
             ?map(Map) = mmd_decode:decodeRawFull(RawMap),
             NewMMDCfg = mmd_cfg:update(MMDCfg,lists:map(fun({A,B}) -> {p6str:mkatom(A),B} end,Map)),
-            ?linfo("Updated MMDCfg: ~w -> ~w",[MMDCfg,NewMMDCfg]),
             dispatch(#channel_close{id=Id,body=ok},State),
             {noreply,State#state{mmdCfg=NewMMDCfg}};
         _ ->
-            case channel_mgr:processOut(Chans,Msg,MMDCfg) of
+            case channel_mgr:process_local(Chans,Msg,MMDCfg) of
                 {NewChans,Msgs} ->
                     dispatch(Msgs,State),
                     {noreply,State#state{chans=NewChans}}
             end
     end;
 
-handle_info({tcp_closed,_},_) ->
+handle_info({tcp_closed,_},#state{chans=Chans}) ->
+    channel_mgr:close_all(Chans,?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,<<"Connection closed">>)),
     {stop,normal,nostate};
+
+handle_info(Down=?DOWN,State=#state{chans=Chans}) ->
+    case channel_mgr:process_down(Chans,Down) of
+	{ok,NewChans,Messages} ->
+	    dispatch(Messages,State),
+	    {noreply,State#state{chans=NewChans}};
+	{error,Other} ->
+	    ?ldebug("proc down got: ~p",[Other]),
+	    {noreply,State}
+    end;
 
 handle_info({'EXIT',Pid,Reason},State=#state{chans=Chans}) ->
     ?lwarn("Force closing channels due to '~p' death for: ~p(~p)",[Reason,Pid,node(Pid)]),

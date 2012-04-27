@@ -21,14 +21,14 @@
 %%%-------------------------------------------------------------------
 -module(client_channel).
 
--behaviour(gen_server2).
+-behaviour(gen_server).
 
 %% API
 -export([new/2,new/3,new/4]).
 
 -export([getState/1,getInfo/1]).
 -export([start_link/3,start_link/4]).
-%% gen_server2 callbacks
+%% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
      terminate/2, code_change/3]).
 -export([prioritise_info/2]).
@@ -53,21 +53,19 @@ getState(Pid) when is_pid(Pid) -> call(Pid,getState).
 getInfo(Pid) -> call(Pid,getInfo).
 
 start_link(Owner,ChanCreate,SvcPid,Cfg) ->
-    gen_server2:start_link(?MODULE,[Owner,ChanCreate,SvcPid,Cfg],[]).
+    gen_server:start_link(?MODULE,[Owner,ChanCreate,SvcPid,Cfg],[]).
 start_link(Owner,ChanCreate,Cfg) ->
-    gen_server2:start_link(?MODULE,[Owner,ChanCreate,Cfg],[]).
+    gen_server:start_link(?MODULE,[Owner,ChanCreate,Cfg],[]).
 
 
 %%%===================================================================
-%%% gen_server2 callbacks
+%%% gen_server callbacks
 %%%===================================================================
 init([Owner,CC,Pid,Cfg]) ->
-    process_flag(trap_exit,true),
-    link(Owner),
+    monitor(process,Owner),
     {ok,#create{mmdCfg=Cfg,owner=Owner,msg=CC,remote=Pid},0};
 init([Owner,CC,Cfg]) ->
-    process_flag(trap_exit,true),
-    link(Owner),
+    monitor(process,Owner),
     {ok,#create{mmdCfg=Cfg,owner=Owner,msg=CC},0}.
 
 handle_call(die,_,_) -> exit(asked_to_die);
@@ -90,23 +88,13 @@ handle_info({'DOWN',_Ref,process,Remote,Reason},#state{remote=Remote,owner=Owner
 			      body=?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,
 					  "Service failed with: ~p",[Reason])}),
     {stop,normal,nostate};
-handle_info({'EXIT',Pid,_},#state{owner=Pid,remote=R,id=Id}) ->
-    ?ldebug("Owner crash"),
-    unlinkRef(R),
-    fire(R,#channel_close{id=Id,body=?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,
+handle_info({'DOWN',_Ref,process,Owner,_Reason},#state{owner=Owner,remote=Remote,id=Id}) ->
+    fire(Remote,#channel_close{id=Id,body=?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,
                                             <<"Connection to the remote channel was lost.">>)}),
     {stop,normal,nostate};
-handle_info({'EXIT',Pid,_},#state{owner=O,remote=Pid,id=Id}) ->
-    ?ldebug("Remote crash"),
-    unlinkRef(O),
-    fire(O,#channel_close{id=Id,body=?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,
-                                            <<"Connection to the remote channel was lost.">>)}),
-    {stop,normal,nostate};
-
 
 handle_info({mmd,From,CC=#channel_close{}}, State) ->
     fire(resolveDest(From,State),CC),
-    unlinkAll(State),
     {stop,normal,nostate};
 
 handle_info({mmd,From,Msg}, State) ->
@@ -137,7 +125,6 @@ resolveDest(From,State) -> ?lwarn("Can't resolve: ~p -> ~p",[From,State]), error
 nextTimeout(Create=#create{owner=Owner,createTime=CT,remote=RPid,msg=#channel_create{service=Svc,id=Id,timeout=Timeout}}) ->
     case p6time:timeLeft(ms,CT+Timeout) of
         N when N < 100 ->
-            unlink(Owner),
             fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_BUSY,"Service '~p' registered, but busy.",[Svc])}),
             ?lwarn("Timeout waiting for service ~p/~p to be avaliable",[Svc,RPid]),
             {stop,normal,nostate};
@@ -161,13 +148,12 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{serv
     case services:findBalanced(Svc) of
         [] ->
             fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_NOT_FOUND,"Service '~p' not found.",[Svc])}),
-            unlink(Owner),
             ?linfo("~p asked for non-existant service: ~p",[Owner,Svc]),
             {stop,normal,nostate};
         Entries ->
             case fire(Entries,CC) of
                 {ok,Pid} ->
-                    monitor(process,Pid),
+		    monitor(process,Pid),
                     create_tracker:incr(Svc),
                     case CC#channel_create.type of
                         call -> ok;
@@ -175,7 +161,7 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{serv
                             case MMDCfg#mmd_cfg.ackSub of
                                 false -> ok;
                                 true ->
-                                    fire(Owner,#channel_message{id=Id,body= <<"$ack">>})
+                                    fire(Owner,#channel_message{id=Id,body= <<"$ack$">>})
                             end
                     end,
                     {noreply,#state{owner=Owner,remote=Pid,id=Id,type=client,svc=Svc}};
@@ -191,7 +177,6 @@ fire([],_Msg) ->
 fire([[_,Pid,_]|Pids], M)->
     case fire(Pid,M) of
         {ok,SvcPid} ->
-	    monitor(process,SvcPid),
 	    {ok,SvcPid};
         {error,retry} ->
             fire(Pids,M);
@@ -203,7 +188,7 @@ fire(undefined,M) -> ?lerr("Unable to send message to 'undefined': ~p",[M]),
                      {error,bad_pid};
 %%fire([_,Pid,_],Msg) -> fire(Pid,Msg);
 fire(Pid,Msg) when is_pid(Pid) ->
-    case catch gen_server2:call(Pid,{mmd,self(),Msg},?CHANNEL_DISPATCH_TIMEOUT) of
+    case catch gen_server:call(Pid,{mmd,self(),Msg},?CHANNEL_DISPATCH_TIMEOUT) of
         ok -> {ok,Pid};
         {ok, NewPid} -> {ok, NewPid};
         {'EXIT',{Reason,_}} -> {error,Reason};
@@ -212,12 +197,6 @@ fire(Pid,Msg) when is_pid(Pid) ->
                  {error,Other}
     end.
 
-unlinkAll(#state{owner=O,remote=R}) -> unlinkRef(O),
-                                       unlinkRef(R).
-unlinkRef(Pid) when is_pid(Pid) ->
-    unlink(Pid);
-unlinkRef(_Other) -> ok.
-
-call(Pid,Term) -> gen_server2:call(Pid,Term).
+call(Pid,Term) -> gen_server:call(Pid,Term).
 
 %% vim: ts=4:sts=4:sw=4:et:sta:

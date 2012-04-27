@@ -50,9 +50,9 @@ init({Name, SortKey}) ->
 
 handle_call({mmd, From, Msg}, _From, Chans) ->
     {reply, ok,
-     case channel_mgr:processIn(Chans, From, Msg) of
+     case channel_mgr:process_remote(Chans, From, Msg) of
 	 {NewChans, CC=#channel_create{type=call}} ->
-	     R = channel_mgr:processOut(
+	     R = channel_mgr:process_local(
 		   NewChans,
 		   mmd_msg:mkError(CC, ?INVALID_REQUEST,
 				   <<"Sub doesn't support Call channels">>)),
@@ -66,7 +66,7 @@ handle_call({mmd, From, Msg}, _From, Chans) ->
 	     NewChans;
 	 {NewChans, CM=#channel_message{}} ->
 	     {Chans2, _M} =
-		 channel_mgr:processOut(
+		 channel_mgr:process_local(
 		   NewChans,
 		   mmd_msg:mkError(CM, ?INVALID_REQUEST,
 				   <<"Sub doesn't accept channel message">>)),

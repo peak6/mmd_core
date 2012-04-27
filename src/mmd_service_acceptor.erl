@@ -35,8 +35,8 @@
 
 -define(DOWN(Ref,Pid,Reason), {'DOWN',Ref,process,Pid,Reason}).
 
--define(PROXY(Name), p6str:mkatom("mod_proxy_~s",[Name])).
--define(PROXYSUP(Name), p6str:mkatom("mod_proxy_~s_sup",[Name])).
+-define(PROXY(Name), p6str:mkatom("mmd_service_~s",[Name])).
+-define(PROXYSUP(Name), p6str:mkatom("mmd_service_~s_sup",[Name])).
 
 getState(Module) ->
     gen_server:call(?PROXY(Module),state).

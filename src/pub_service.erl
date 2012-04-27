@@ -49,10 +49,10 @@ init({Name, SortKey}) ->
 
 handle_call({mmd, From, Msg}, _From, State=#state{chans=Chans, sub=Sub}) ->
     NewChans3 =
-	case channel_mgr:processIn(Chans, From, Msg) of
+	case channel_mgr:process_remote(Chans, From, Msg) of
 	    {NewChans, CC=#channel_create{type=call, body=Body}} ->
 		sub_service:pub(Sub, Body),
-		case channel_mgr:processOut(NewChans,
+		case channel_mgr:process_local(NewChans,
 					    mmd_msg:mkReply(CC, null)) of
 		    {NewChans2, []} -> NewChans2;
 		    {NewChans2, Other} ->

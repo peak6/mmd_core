@@ -9,7 +9,7 @@
 -define(WATCHERS,service_watchers).
 -define(P6DMAP,service_map).
 
--record(state, {known=sets:new()}).
+-record(state, {known=sets:new(), chans=channel_mgr:new()}).
 
 xformEntryAdd(E=#dm{val={SL,HL},node=Node}) ->
     W = service_node_weight:getNodeWeight(Node),
@@ -111,11 +111,10 @@ registerConfigured() ->
 
 
 init([]) ->
-    p6pg:start_link(?WATCHERS),
     p6dmap:new(?P6DMAP,?MODULE),
- %%   regLocal(?MODULE),
+    regLocal(?MODULE),
     registerConfigured(),
-%%    timer:send_interval(500, update_svcs),
+    timer:send_interval(500, update_svcs),
     {ok, #state{}}.
 
 terminate(_Reason, _State) ->
@@ -127,13 +126,6 @@ code_change(_OldVsn, State, _Extra) ->
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-                                                % helpers
-broadcast(Body) ->
-    lists:foreach(fun ({Pid,ChanId}) ->
-			  M = #channel_message{id=ChanId, body=Body},
-			  mmd_msg:dispatch(Pid, M)
-		  end,
-		  p6pg:memberData(?WATCHERS)).
 
 %% Channel Messages
 
@@ -156,27 +148,66 @@ handle_call({mmd, From, CC=#channel_create{type=call,body=undefined}}, _From, St
     {reply, ok, State};
 
 handle_call({mmd, From, CC=#channel_create{type=call,body=SvcPattern}}, _From, State) ->
-    Ret = lists:foldl(fun(Svc,Acc) ->
-			      SB = p6str:mkbin(Svc),
-			      case re:run(SB,SvcPattern) of
-				  nomatch -> Acc;
-				  _ -> [SB|Acc]
-			      end
-		      end,
-		      [],
-		      allServiceNames()),
-    mmd_msg:reply(From, CC, Ret),
+    Str = case mmd_decode:decode(SvcPattern) of
+	      {S, _Rst} -> S;
+	      S -> S
+	  end,
+    case re:compile(Str) of
+	{ok, MP} ->
+	    Ret = lists:foldl(fun(Svc,Acc) ->
+				      SB = p6str:mkbin(Svc),
+				      case re:run(SB, MP) of
+					  nomatch -> Acc;
+					  _ -> [SB|Acc]
+				      end
+			      end,
+			      [],
+			      allServiceNames()),
+	    mmd_msg:reply(From, CC, Ret);
+	{error, {ErrString, Pos}} ->
+	    mmd_msg:error(From, CC, ?INVALID_REQUEST,
+			  "Failed to compile regex: reason: ~p, "
+			  "pos: ~p, regex: ~p", [ErrString, Pos, SvcPattern])
+    end,
     {reply,ok,State};
 
-handle_call({mmd, From, CC=#channel_create{type=sub, id=Id}}, _From, State) ->
-    All = dispatchDiff(State),
-    mmd_msg:reply(From, CC, ?map([{added,?array(sets:to_list(All))}])),
-    ok = p6pg:add(?WATCHERS,From,Id),
-    {reply, ok, State#state{known=All}};
+handle_call({mmd, From, CC=#channel_create{type=sub, body=SvcPattern}}, _From,
+	    State=#state{chans=Chans}) ->
+    case case mmd_decode:decode(SvcPattern) of
+	     {nil, _Rst} -> re:compile("");
+	     {Str, _Rst} -> re:compile(Str);
+	     undefined -> re:compoile("");
+	     S -> re:compile(S)
+	 end of
+	{ok, MP} ->
+	    case channel_mgr:process_remote(Chans, From, CC, MP) of
+		{NewChans, _Msg} ->
+		    All = dispatchDiff(State),
+		    Filtered =
+			sets:fold(fun (Svc, Svcs) ->
+					  case re:run(p6str:mkbin(Svc), MP) of
+					      nomatch -> Svcs;
+					      _ -> [Svc | Svcs]
+					  end
+				  end,
+				  [],
+				  All),
+		    mmd_msg:reply(From, CC, ?map([{added, ?array(Filtered)}])),
+		    {reply, ok, State#state{known=All, chans=NewChans}};
+		NewChans ->
+		    {reply, ok, State#state{chans=NewChans}}
+	    end;
+	{error, {ErrString, Pos}} ->
+	    mmd_msg:error(From, CC, ?INVALID_REQUEST,
+			  "Failed to compile regex: reason: ~p, "
+			  "pos: ~p, regex: ~p", [ErrString, Pos, SvcPattern]),
+	    {reply, ok, State}
+    end;
 
-handle_call({mmd, _MMDFrom, #channel_close{}}, _GSFrom, State) ->
-    %% Auto-removed by p6pg whent he channel dies
-    {reply,ok, State};
+handle_call({mmd, From, M=#channel_close{}}, _From,
+	    State=#state{chans=Chans}) ->
+    {NewChans, _Msg} = channel_mgr:process_remote(Chans, From, M),
+    {reply, ok, State#state{chans=NewChans}};
 
 handle_call(Request, From, State) ->
     ?linfo("Unexpected call: ~p from: ~p, with state: ~p",[Request,From,State]),
@@ -186,14 +217,25 @@ handle_cast(Msg, State) ->
     ?linfo("Unexpected cast: ~p, with state: ~p",[Msg,State]),
     {noreply, State}.
 
+re_filter(MP, Es) -> re_filter(MP, Es, []).
+re_filter(_MP, [], Acc) -> Acc;
+re_filter(MP, [E | Es], Acc) ->
+    case re:run(p6str:mkbin(E), MP) of
+	nomatch -> re_filter(MP, Es, Acc);
+	_ -> re_filter(MP, Es, [E | Acc])
+    end.
 
-dispatchDiff(State) ->
-    case calcDiff(State) of
-        {All,[],[]} -> ok;
-        {All,Add,[]} -> broadcast(?map([{added,?array(Add)}]));
-        {All,[],Rem} -> broadcast(?map([{removed,?array(Rem)}]));
-        {All,Add,Rem} -> broadcast(?map([{added,?array(Add)},{removed,?array(Rem)}]))
-    end,
+dispatchDiff(State=#state{chans=Chans}) ->
+    {All, Add, Rm} = calcDiff(State),
+    channel_mgr:send_all_matching(
+      fun (MP) ->
+	      case {re_filter(MP, Add), re_filter(MP, Rm)} of
+		  {[], []} -> false;
+		  {A, []} -> {true, ?map([{added, ?array(A)}])};
+		  {[], R} -> {true, ?map([{removed, ?array(R)}])};
+		  {A, R} -> ?map([{added, ?array(A)}, {removed,?array(R)}])
+	      end
+      end, Chans),
     All.
 
 -spec(calcDiff(State::#state{}) -> {All::set, Added::list(), Removed::list()}).
