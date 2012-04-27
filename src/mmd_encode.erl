@@ -132,8 +132,10 @@ encode_map([{K,V}|Tail],Sz,Acc) ->
 
 encode_uuid(Bin) when is_binary(Bin) ->
     Bin;
-encode_uuid(?uuid(UUID)) ->
-    UUID.
+encode_uuid(?uuid(<<UUID:16/binary>>)) ->
+    UUID;
+encode_uuid(?uuid(<<UUID:36/binary>>)) ->
+    p6uuid:parse(UUID).
 
 encode_secid(Bin) when is_binary(Bin) ->
     Bin;
