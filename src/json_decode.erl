@@ -20,11 +20,6 @@
 
 -include("mmd.hrl").
 
-decode({json,Json}) -> decode(Json);
-decode(Json) ->
-    {ok,Obj,[]} = json:decode(Json),
-    catch decodeDoc(Obj).
-
 decodeObj({json,Json}) -> decodeObj(Json);
 decodeObj(JS) ->
     case json:decode(JS) of
@@ -32,21 +27,10 @@ decodeObj(JS) ->
         E -> E
     end.
 
-
-auth(undefined) -> ?NO_AUTH;
-auth(Other) -> uuid(Other).
-
-uuid(?uuid(U)) -> U;
-uuid(Id) ->
-    try
-        p6uuid:parse(Id)
-    catch
-        error:function_clause -> throw({error,{bad_uuid,Id}});
-        T:E -> throw({error,{T,E}})
-    end.
-
-body(Body) -> toErl(Body).
-svc(Bin) -> p6str:mkatom(Bin).
+decode({json,Json}) -> decode(Json);
+decode(Json) ->
+    {ok,Obj,[]} = json:decode(Json),
+    catch decodeDoc(Obj).
 
 decodeDoc({obj,Map}) ->
     case p6props:first(["call","sub","close","msg"],Map) of
@@ -68,30 +52,62 @@ transDoc({"sub",Id},[Svc,AT,Body,Timeout]) ->
     #channel_create{type=sub,id=uuid(Id),service=svc(Svc),auth_token=auth(AT),body=body(Body),timeout=transTimeout(Timeout)}.
 
 
+auth(undefined) -> ?NO_AUTH;
+auth(Other) -> uuid(Other).
+
+uuid(?uuid(U)) -> U;
+uuid(Id) ->
+    try
+        p6uuid:parse(Id)
+    catch
+        error:function_clause -> throw({error,{bad_uuid,Id}});
+        T:E -> throw({error,{T,E}})
+    end.
+
+body(Body) -> toErl(Body).
+svc(Bin) -> p6str:mkatom(Bin).
+
 transTimeout(undefined) -> 3000;
 transTimeout(Time) -> Time.
 
-toErl({obj,[{"_mmd_time",Time}]}) -> parseTime(Time);
-toErl({obj,Obj}) -> transMap(?map(lists:map(fun({K,V}) -> {list_to_binary(K),toErl(V)} end, Obj)));
-toErl(null) -> undefined;
 toErl(List) when is_list(List) -> ?array(lists:map(fun(X) -> toErl(X) end, List));
+toErl(Num) when is_number(Num) -> Num;
+%%toErl({obj,[{"_mmd_uuid",UUID}]}) -> ?uuid(UUID);%
+%toErl({obj,[{"_mmd_secid",SecID}]}) -> ?secid(SecID);
+%toErl({obj,[{"_mmd_time",Time}]}) -> parseTime(Time);
+toErl({obj,Obj}) -> transMap(Obj);
+		      %%?map(lists:map(fun({K,V}) -> {list_to_binary(K),toErl(V)} end, Obj)));
+toErl(null) -> undefined;
 toErl(Val) -> Val.
 
-transMap(M) ->
-    transError(M).
-
-transError(M=?map(Map)) ->
-    case p6props:any([<<"_mmd_error">>,<<"msg">>],Map) of
-        [undefined,_] -> transUUID(M);
-        [Code,Msg] -> ?error(Code,Msg)
+%% Special MMD types that json doesn't handle are sent as maps with a special key
+transMap([{"_mmd_uuid",UUID}]) -> ?uuid(UUID);
+transMap([{"_mmd_secid",SecID}]) -> ?secid(SecID);
+transMap([{"_mmd_time",Time}]) -> parseTime(Time);
+transMap(Map) ->
+    case p6props:all([<<"_mmd_error">>,<<"msg">>],Map) of
+	{ok,Code,Msg} -> ?error(Code,toErl(Msg));
+	%% Map isn't an error, just translate the k/v pairs
+	_ -> ?map(lists:map(fun({K,V}) -> {list_to_binary(K),toErl(V)} end, Map))
     end.
 
-transUUID(M=?map(Map)) ->
-    case p6props:any([<<"_mmd_uuid">>,<<"_mmd_secid">>],Map) of
-        [undefined,undefined] -> M;
-        [undefined,SecID] -> ?secid(uuid(SecID));
-        [UUID,undefined] -> ?uuid(uuid(UUID))
-    end.
+% transMap(M) ->
+% %% We're holding a map, first see if it's an error message
+%     transError(M).
+
+% transError(M=?map(Map)) ->
+% %% If _mmd_error is not present, try to process as a UUID / SecID
+%     case p6props:any([<<"_mmd_error">>,<<"msg">>],Map) of
+%         [undefined,_] -> transUUID(M);
+%         [Code,Msg] -> ?error(Code,Msg)
+%     end.
+
+% transUUID(M=?map(Map)) ->
+%     case p6props:any([<<"_mmd_uuid">>,<<"_mmd_secid">>],Map) of
+%         [undefined,undefined] -> M;
+%         [undefined,SecID] -> ?secid(uuid(SecID));
+%         [UUID,undefined] -> ?uuid(uuid(UUID))
+%     end.
 
 
 parseTime(Time) when is_binary(Time) -> parseTime(binary_to_list(Time));

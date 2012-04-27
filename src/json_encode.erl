@@ -42,7 +42,8 @@ encode_obj(#channel_create{id=Id,body=Body,auth_token=AT,service=Svc,type=T}) ->
     {obj,[{T,uuidToStr(Id)},{service,Svc},{token,uuidToStr(AT)},{body,encode_obj(Body)}]};
 encode_obj(#channel_message{id=Id,body=Body}) -> {obj,[{msg,uuidToStr(Id)},{body,encode_obj(Body)}]};
 encode_obj(#channel_close{id=Id,body=Body}) ->{obj,[{close,uuidToStr(Id)},{body,encode_obj(Body)}]};
-encode_obj(?uuid(Id)) -> {obj,[{'_mmd_uuid',uuidToStr(Id)}]};
+encode_obj(?uuid(<<Id:36/binary>>)) -> {obj,[{'_mmd_uuid',Id}]};
+encode_obj(?uuid(<<Id:16/binary>>)) -> {obj,[{'_mmd_uuid',uuidToStr(Id)}]};
 %%encode_obj(?secid(Id)) -> {obj,[{'_mmd_secid',uuidToStr(Id)}]};
 encode_obj(?map(undefined)) -> {obj,[]};
 encode_obj(?map(Map)) -> {obj,lists:map(fun({K,V}) -> {p6str:mkbin(K),encode_obj(V)} end,Map)};
