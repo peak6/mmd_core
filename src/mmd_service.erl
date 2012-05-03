@@ -103,9 +103,15 @@ handle_info(?CREATE_CHANNEL,
 			 client=Client}) ->
     process_result(State#state{create=undefined},Mod:service_subscribe(Client,?df(CC)));
 
-handle_info({'DOWN',_Ref,process,Client,Reason},#state{client=Client,id=Id,mod=Mod,mod_state=ModState}) ->
-    Mod:service_close(#channel_close{id=Id,body=?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,"Client terminated with: ~p",[Reason])},ModState),
-    {stop,normal,nostate};
+handle_info({'DOWN', _Ref, process, Client, Reason},
+	    #state{client=Client, id=Id, mod=Mod, mod_state=ModState}) ->
+    Mod:service_close(
+      #channel_close{id=Id,
+		     body=?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,
+				 p6str:mkbin(
+				   "Client terminated with: ~p", [Reason]))},
+      ModState),
+    {stop, normal, nostate};
 
 handle_info(Info, State=#state{mod_state=ModState,mod=Mod}) ->
     process_result(State,Mod:handle_other(Info,ModState)).

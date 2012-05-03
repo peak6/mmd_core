@@ -83,7 +83,7 @@ waitFor(WaitFor, Received) ->
                 {Ref,_Id,_CCPid,_Pid} ->
 		    waitFor(lists:keydelete(Ref,1,WaitFor),
 			    [{Pid, ?error(?SERVICE_ERROR,
-					  p6str:mkstr("Service error: ~p",
+					  p6str:mkbin("Service error: ~p",
 						      [Reason]))} | Received]);
                 false ->
 		    ?lwarn("Dunno what ~p/~p/~p is",[Ref,Pid,Reason]),
