@@ -24,18 +24,6 @@
 -define(CHILD(I, Args, Type), {I, {I, start_link, Args}, ?DEFAULT_RESTART, ?DEFAULT_SHUTDOWN, Type, [I]}).
 -define(CHILD(I, Type), {I, {I, start_link, []}, ?DEFAULT_RESTART, ?DEFAULT_SHUTDOWN, Type, [I]}).
 
-pubsub_child({Name, SortKey}, Type) ->
-    SortKey2 = case SortKey of
-		   '$node' -> node();
-		   _ -> SortKey
-	       end,
-    {list_to_atom(Name ++ "_" ++ Type),
-     {list_to_atom(Type ++ "_service"), start_link, [Name, SortKey2]},
-     ?DEFAULT_RESTART,
-     ?DEFAULT_SHUTDOWN,
-     worker,
-     []}.
-
 mmd_tcp_client_child({Name, Host, Port}) ->
     {Name,
      {mmd_tcp_client, start_link, [Name, Host, Port]},
@@ -80,16 +68,6 @@ init([]) ->
                undefined -> [];
                {ok,Port} -> [?CHILD(mmd_cowboy_listener,[Port],worker)]
            end,
-    PubSubSpecs = case application:get_env(pub_subs) of
-		      undefined ->
-			  [];
-		      {ok, PubSubs} ->
-			  lists:foldl(fun (Spec, PS) ->
-					      [pubsub_child(Spec, "pub"),
-					       pubsub_child(Spec, "sub") |
-					       PS]
-				      end, [], PubSubs)
-		  end,
     MmdTcpClientSpecs = case application:get_env(mmd_tcp_clients) of
 			    undefined ->
 				[];
@@ -119,7 +97,7 @@ init([]) ->
                 ?CHILD(echo2,worker),
                 ?CHILD(mmd_autodiscover,worker),
                 ?CHILD(socket_sup,supervisor)
-               ] ++ Http ++ PubSubSpecs ++ MmdTcpClientSpecs ++ ProxySpecs,
+               ] ++ Http ++ MmdTcpClientSpecs ++ ProxySpecs,
     {ok, {SupFlags,Children}}.
 
 %%%===================================================================
