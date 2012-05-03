@@ -87,15 +87,15 @@ handle_info(?CREATE_CHANNEL,
 	    State=#state{create=CC=#channel_create{type=call},
 			 mod=Mod,
 			 client=Client}) ->
-    
+
     Result =  %% Map reply -> close since this is a call
-	case Mod:service_call(Client,?df(CC)) of 
+	case Mod:service_call(Client,?df(CC)) of
 	    {reply,Body,_} -> {close,Body};
 	    {reply,Body} -> {close,Body};
 	    Other -> Other
 	end,
     process_result(State#state{create=undefined},Result);
-		
+
 %% Subscribes
 handle_info(?CREATE_CHANNEL,
 	    State=#state{create=CC=#channel_create{},
