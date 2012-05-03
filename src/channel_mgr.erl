@@ -16,7 +16,7 @@
 -include_lib("p6core/include/logger.hrl").
 -export([new/0, new/1]).
 -export([handleExit/3, process_local/2, process_local/3, process_local/4]).
--export([process_remote/3, process_remote/4]).
+-export([process_remote/3, process_remote/4, process_remote_get_data/3]).
 -export([process_down/2]).
 -export([sendAll/2, send_all_matching/2]).
 -export([refToIds/2, removeRef/2]).
@@ -136,6 +136,22 @@ process_remote(State,_From,M=#channel_close{id=Id}, _Data) ->
 	    demonitor(Ref,[flush]),
 	    ets:delete(?tid(State), Id),
 	    {State, M}
+    end.
+
+process_remote_get_data(State, From, M=#channel_message{id=Id}) ->
+    case ets:lookup(?tid(State), Id) of
+        [] ->
+            ?lwarn("Unknown channel: ~p from: ~p",[Id,From]),
+            State;
+        [#chan{data=Data}] -> {State, M, Data}
+    end;
+process_remote_get_data(State,_From,M=#channel_close{id=Id}) ->
+    case ets:lookup(?tid(State),Id) of
+	[] -> {State, M};
+	[#chan{ref=Ref, data=Data}] ->
+	    demonitor(Ref,[flush]),
+	    ets:delete(?tid(State), Id),
+	    {State, M, Data}
     end.
 
 fire(To,Msg) -> fire(self(),To,Msg).
