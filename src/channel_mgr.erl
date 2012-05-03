@@ -101,7 +101,7 @@ process_local(State, M=#channel_message{id=Id}, _Cfg, _Data) ->
     end;
 
 process_local(State, M=#channel_close{id=Id}, _Cfg, _Data) ->
-    case ets:lookup(?tid(State),Id) of 
+    case ets:lookup(?tid(State),Id) of
         badarg ->
             ?lwarn("Attempt to close unknown channel: ~p",[Id]),
             {State, noSuchChannel(Id)};
