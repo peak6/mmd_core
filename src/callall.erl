@@ -24,41 +24,37 @@
 -include_lib("p6core/include/logger.hrl").
 -include("mmd.hrl").
 
--export([handleCall/2,handleSubscribe/2,handleMessage/2,handleClose/2]).
+-export([service_call/2, service_subscribe/2]).
 
--spec(handleCall(From::pid(),Create::#channel_create{}) -> ok).
-handleCall(From,CC=#channel_create{timeout=Timeout,auth_token=AT,body=?map(Map)}) ->
-    case p6props:any([<<"service">>,<<"body">>],Map) of
-        [undefined,_] -> badCall(From,CC);
-        [Svc,Body] ->
-            case cluster_mmd_call:call(Svc,Body,AT,Timeout) of
-                {error,not_found} -> mmd_msg:reply(From,CC,?error(?SERVICE_NOT_FOUND,p6str:mkbin("Service: ~s not found",[Svc])));
+service_call(_C, #channel_create{timeout=TO, auth_token=AT, body=?map(M)}) ->
+    case p6props:any([<<"service">>, <<"body">>], M) of
+        [undefined, _] -> bad_call();
+        [Svc, Body] ->
+            case cluster_mmd_call:call(Svc, Body, AT, TO) of
+                {error, not_found} ->
+		    {error,
+		     ?SERVICE_NOT_FOUND,
+		     "Service: ~s not found", [Svc]};
                 Result when is_list(Result) ->
                     Ret = lists:map(fun(Pair={K,_}) when is_atom(K) -> Pair;
                                        ({K,V}) -> {node(K),V}
                                     end, Result),
-                    mmd_msg:reply(From,CC,?map(Ret));
+                    {reply, ?map(Ret)};
                 Other ->
-                    ?lerr("Received ~p from cluster_mmd_call:call(~p, ~p, ~p, ~p)",[Other,Svc,Body,AT,Timeout]),
-                    mmd_msg:reply(From,CC,?error(?SERVICE_ERROR,p6str:mkbin("Unexpected return from cluster call: ~p",[Other])))
+                    ?lerr("Received ~p from "
+			  "cluster_mmd_call:call(~p, ~p, ~p, ~p)",
+			  [Other, Svc, Body, AT, TO]),
+		    {error,
+		     ?SERVICE_ERROR,
+		     "Unexpected return from cluster call: ~p", [Other]}
                 end
     end;
 
-handleCall(From,CC=#channel_create{}) ->
-    badCall(From,CC).
+service_call(_Client, #channel_create{}) ->
+    bad_call().
 
-badCall(From,Create) ->
-    mmd_msg:error(From,Create,?INVALID_REQUEST,<<"Call takes a map(service,body)">>).
+bad_call() ->
+    {error, ?INVALID_REQUEST, <<"Call takes a map(service, body)">>}.
 
--spec(handleSubscribe(From::pid(),Create::#channel_create{}) -> ok).
-handleSubscribe(From,ChanCreate=#channel_create{}) ->
-    mmd_msg:error(From,ChanCreate,?INVALID_REQUEST,<<"Subscribe not supported">>).
-
--spec(handleMessage(From::pid(),Create::#channel_message{}) -> ok).
-handleMessage(_From,_ChanMsg=#channel_message{}) ->
-    ok.
-
--spec(handleClose(From::pid(),Create::#channel_close{}) -> ok).
-handleClose(_From,_ChanClose=#channel_close{}) ->
-    ok.
-
+service_subscribe(_Client, _CC) ->
+    {error, ?INVALID_REQUEST, <<"Subscribe not supported">>}.
