@@ -55,9 +55,10 @@ call(Pids, Call = #call{}) ->
             ?lwarn("Unexpected: ~p",[Other])
     end.
 
-doCall(Parent,Pids,Call=#call{timeout=T}) ->
+doCall(Parent,Pids,Call=#call{timeout=Timeout}) ->
+    erlang:send_after(Timeout, self(), timeout),
     WaitFor = [ fire(Pid,Call) || Pid <- Pids ],
-    Parent ! waitFor(WaitFor,p6time:fromNow(ms,T),[]).
+    Parent ! waitFor(WaitFor, []).
 
 fire(Pid,#call{svc=Svc,timeout=Timeout,body=Body,at=AT}) ->
     CC = #channel_create{service=Svc,timeout=Timeout,auth_token=AT,body=Body,type=call},
@@ -66,32 +67,33 @@ fire(Pid,#call{svc=Svc,timeout=Timeout,body=Body,at=AT}) ->
     {Ref,CC#channel_create.id,CCPid,Pid}.
 
 
-waitFor([],_,Rec) -> {ok,Rec};
-waitFor(WaitFor,WaitUntil,Received) ->
-    WaitTime = p6time:timeLeft(ms,WaitUntil),
+waitFor([], Rec) -> {ok, Rec};
+waitFor(WaitFor, Received) ->
     receive
         {'$gen_call',GSRef,{mmd,_From,#channel_close{id=Id,body=Body}}} ->
             gen_server:reply(GSRef,ok),
             case lists:keyfind(Id,2,WaitFor) of
                 {Ref,Id,_Pid,SvcPid} ->
                     erlang:demonitor(Ref),
-                    waitFor(lists:keydelete(Id,2,WaitFor),WaitUntil,[{SvcPid,Body}|Received])
+                    waitFor(lists:keydelete(Id, 2, WaitFor),
+			    [{SvcPid, Body} | Received])
             end;
         ?DOWN(Ref,Pid,Reason) ->
             case lists:keyfind(Ref,1,WaitFor) of
-                {Ref,_Id,_CCPid,_Pid} -> waitFor(
-                                    lists:keydelete(Ref,1,WaitFor),
-                                    WaitUntil,
-                                    [{Pid,?error(?SERVICE_ERROR,p6str:mkstr("Service error: ~p",[Reason]))}|Received]);
-                false -> ?lwarn("Dunno what ~p/~p/~p is",[Ref,Pid,Reason]),
-                         waitFor(WaitFor,WaitUntil,Received)
+                {Ref,_Id,_CCPid,_Pid} ->
+		    waitFor(lists:keydelete(Ref,1,WaitFor),
+			    [{Pid, ?error(?SERVICE_ERROR,
+					  p6str:mkstr("Service error: ~p",
+						      [Reason]))} | Received]);
+                false ->
+		    ?lwarn("Dunno what ~p/~p/~p is",[Ref,Pid,Reason]),
+		    waitFor(WaitFor, Received)
             end;
+	timeout ->
+	    timeout(WaitFor, Received);
         Other ->
             ?lwarn("Unexpected: ~p",[Other]),
-            waitFor(WaitFor,WaitUntil,Received)
-
-    after WaitTime ->
-            timeout(WaitFor,Received)
+            waitFor(WaitFor, Received)
     end.
 
 timeout(WaitFor,Received) ->
