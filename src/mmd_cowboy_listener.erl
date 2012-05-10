@@ -22,6 +22,7 @@ start_link(Port) ->
 
     Dispatch = [
 		{'_', [
+		       {[<<"_download">>,'...'], mmd_cowboy_download, Cfg},
 		       {[<<"_ws">>], mmd_cowboy_ws, Cfg},
 		       {[<<"call">>,'...'], mmd_cowboy_call,Cfg},
 		       {[<<"_call">>,'...'], mmd_cowboy_call,Cfg},
