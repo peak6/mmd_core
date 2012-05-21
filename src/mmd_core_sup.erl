@@ -96,6 +96,7 @@ init([]) ->
                 ?CHILD(time_service,worker),
                 ?CHILD(echo2,worker),
                 ?CHILD(sub,worker),
+                ?CHILD(sub_chans,worker),
                 ?CHILD(pub,worker),
                 ?CHILD(mmd_autodiscover,worker),
                 ?CHILD(socket_sup,supervisor)
