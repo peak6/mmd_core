@@ -16,6 +16,7 @@
 -include_lib("p6core/include/logger.hrl").
 -export([new/0, new/1]).
 -export([handleExit/3, process_local/2, process_local/3, process_local/4]).
+-export([process_local_set_data/3, process_local_set_data/4]).
 -export([process_remote/3, process_remote/4, process_remote_get_data/3]).
 -export([process_down/2]).
 -export([sendAll/2, send_all_matching/2]).
@@ -110,6 +111,17 @@ process_local(State, M=#channel_close{id=Id}, _Cfg, _Data) ->
 	    fire(Pid,M),
 	    ets:delete(?tid(State),Id),
 	    {State,[]}
+    end.
+
+process_local_set_data(State, M, Data) ->
+    process_local_set_data(State, M, undefined, Data).
+
+process_local_set_data(State, M=#channel_message{id=Id}, _Cfg, Data) ->
+    case ets:lookup(?tid(State), Id) of
+        badarg -> {State, noSuchChannel(Id)};
+        [Ch = #chan{remote = Pid}] -> fire(Pid,M),
+	       ets:insert(?tid(State), Ch#chan{data = Data}),
+	       {State, []}
     end.
 
 process_remote(State, From, M) -> process_remote(State, From, M, undefined).
