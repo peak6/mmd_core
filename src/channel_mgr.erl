@@ -48,8 +48,11 @@ sendAll(State, Body) ->
 	      end, State, ?tid(State)).
 
 send_all_matching(F, State) ->
-    ets:foldl(fun(#chan{id = Id, remote = Ref, data = Data}, S) ->
+    ets:foldl(fun(Ch=#chan{id = Id, remote = Ref, data = Data}, S) ->
 		      case F(Data) of
+			  {true, Body, Data2} ->
+			      fire(Ref, #channel_message{id=Id, body=Body}),
+			      ets:insert(?tid(State), Ch#chan{data=Data2});
 			  {true, Body} ->
 			      fire(Ref, #channel_message{id=Id, body=Body});
 			  false ->
