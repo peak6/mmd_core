@@ -81,17 +81,10 @@ websocket_info({'$gen_call',Ref,{mmd,From,Msg}},Req,State) ->
     ?gsreply(Ref,ok),
     process_mmd(Msg,From,Req,State);
 
-%% Used for general gen_server:call() handling, can not send anything to websocket, must immediately return
+%% Used for general gen_server:call() handling
 websocket_info({'$gen_call',Ref,Msg},Req,State) ->
     handle_call(Msg,Ref,Req,State);
-    % case handle_call(Msg,Ref,Req,State) of
-    % 	{reply,Reply,NewReq,NewState} ->
-    % 	    gen_server:reply(Ref,Reply),
-    % 	    {ok,NewReq,NewState};
-    % 	Other ->
-    % 	    ?lerr("Bad return from handle_call(~p,~p,~p)\nResult: ~p",[Msg,Req,State,Other]),
-    % 	    {Other,Req,State}
-    % end;
+
 websocket_info(Down=?DOWN,Req,State=#state{chans=Chans}) ->
     case channel_mgr:process_down(Chans,Down) of
 	{ok,NewChans,Messages} ->
