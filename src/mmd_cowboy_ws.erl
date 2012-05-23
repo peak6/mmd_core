@@ -6,10 +6,11 @@
 	 websocket_info/3, websocket_terminate/3]).
 
 -include("mmd_cowboy_common.hrl").
--record(state,{chans=channel_mgr:new(),trace=true,cfg=#mmd_cfg{}}).
+-record(state,{chans=channel_mgr:new(),trace=true,cfg=#mmd_cfg{},xhr=false,xhr_cache,xhr_ref,type=binary}).
 
 -define(DOWN,{'DOWN',_Ref,process,_Pid,_Reason}).
 
+-define(gsreply(Ref,Msg), gen_server:reply(Ref,Msg)).
 -define(trc(State,Msg,Args), case State#state.trace of
 				 true -> ?ldebug(Msg,Args);
 				 _ -> ok
@@ -35,12 +36,32 @@ terminate(_Req, _State) ->
 
 format_addr({IP,Port}) -> p6str:ip_port_to_str(IP,Port).
 
-websocket_init(_Any, Req, #htcfg{trace=Trace}) ->
+is_set(true) -> true;
+is_set(<<"true">>) -> true;
+is_set(_Other) -> false.
+
+websocket_init(_Any, OReq, #htcfg{trace=Trace}) ->
+    {Props,Req} = cowboy_http_req:qs_vals(OReq),
+    case is_set(p6props:get(<<"xhr">>,Props)) of
+	true ->
+	    UUID = p6str:mkbin(uuid:to_string(p6uuid:next())),
+	    p6dmap:addLocal(?XHR_DMAP,UUID,self()),
+	    self() ! {initXHR,UUID},
+	    XHRCache = [],
+	    XHR=true;
+	false ->
+	    XHRCache = undefined,
+	    XHR=false
+    end,
+    RespType = case is_set(p6props:get(<<"binary">>,Props)) of
+		   false -> text;
+		   true -> binary
+	       end,
     {ok,_Transport,Socket} = ?get(transport,Req), %% Not sure if this is a stable api
     {Peer,_} = ?get(peer,Req),
     con_tracker:registerConnection(self(),websocket,format_addr(Peer),Socket),
     Req2 = cowboy_http_req:compact(Req),
-    {ok, Req2, #state{trace=Trace}, hibernate}.
+    {ok, Req2, #state{xhr=XHR,type=RespType,trace=Trace,xhr_cache=XHRCache}, hibernate}.
 
 websocket_handle({text, Data}, Req, State) ->
     ?trc(State,"Received(~p): ~p",[size(Data),Data]),
@@ -57,30 +78,35 @@ websocket_handle({text, Data}, Req, State) ->
 
 %% Used for routing incoming MMD network messages back to websocket client
 websocket_info({'$gen_call',Ref,{mmd,From,Msg}},Req,State) ->
-    gen_server:reply(Ref,ok),
+    ?gsreply(Ref,ok),
     process_mmd(Msg,From,Req,State);
 
 %% Used for general gen_server:call() handling, can not send anything to websocket, must immediately return
 websocket_info({'$gen_call',Ref,Msg},Req,State) ->
-    case handle_call(Msg,Req,State) of
-	{reply,Reply,NewReq,NewState} ->
-	    gen_server:reply(Ref,Reply),
-	    {ok,NewReq,NewState};
-	Other ->
-	    ?lerr("Bad return from handle_call(~p,~p,~p)\nResult: ~p",[Msg,Req,State,Other]),
-	    {Other,Req,State}
-    end;
+    handle_call(Msg,Ref,Req,State);
+    % case handle_call(Msg,Ref,Req,State) of
+    % 	{reply,Reply,NewReq,NewState} ->
+    % 	    gen_server:reply(Ref,Reply),
+    % 	    {ok,NewReq,NewState};
+    % 	Other ->
+    % 	    ?lerr("Bad return from handle_call(~p,~p,~p)\nResult: ~p",[Msg,Req,State,Other]),
+    % 	    {Other,Req,State}
+    % end;
 websocket_info(Down=?DOWN,Req,State=#state{chans=Chans}) ->
     case channel_mgr:process_down(Chans,Down) of
 	{ok,NewChans,Messages} ->
-	    jsreply(Messages,Req,State),
+	    reply(Messages,Req,State),
 	    {ok,Req,State#state{chans=NewChans}};
 	{error,Other} ->
 	    ?ldebug("proc down got: ~p",[Other]),
 	    {ok,Req,State,hibernate}
     end;
 websocket_info({dispatch,Message},Req,State) ->
-    jsreply(Message,Req,State);
+    ws_reply(Message,Req,State); %% {dispatch,Msg} messages are only used with websockets
+
+
+websocket_info({initXHR,ID},Req,State) ->
+    {reply,{text,ID},Req,State,hibernate};
 
 %% Catch all to avoid blowing up socket
 websocket_info(_Info, Req, State) ->
@@ -90,60 +116,89 @@ websocket_info(_Info, Req, State) ->
 websocket_terminate(_Reason, _Req, _State) ->
     ok.
 
-handle_call(trace,Req,State) ->
+handle_call(trace,Ref,Req,State) ->
     ?linfo("Tracing enabled"),
-    {reply,{trace,enabled},Req,State#state{trace=true}};
-handle_call(notrace,Req,State) ->
+    ?gsreply(Ref,{trace,enabled}),
+    {ok,Req,State#state{trace=true}};
+handle_call(notrace,Ref,Req,State) ->
     ?linfo("Tracing disabled"),
-    {reply,{trace,disabled},Req,State#state{trace=false}};
-handle_call(state,Req,State) ->
-    {reply,?DUMP_REC(state,State),Req,State};
-handle_call(req,Req,State) ->
-    {reply,?DUMP_REC(http_req,Req),Req,State};
-handle_call(socket,Req,State) ->
+    ?gsreply(Ref,{trace,enabled}),
+    {ok,Req,State=#state{trace=false}};
+handle_call(state,Ref,Req,State) ->
+    ?gsreply(Ref,?DUMP_REC(state,State)),
+    {ok,Req,State};
+handle_call(req,Ref,Req,State) ->
+    ?gsreply(Ref,?DUMP_REC(http_req,Req)),
+    {ok,Req,State};
+handle_call(socket,Ref,Req,State) ->
     {ok,_Transport,Socket} = ?get(transport,Req),
-    {reply,Socket,Req,State};
-handle_call(Other,Req,State) ->
-    {reply,{error,{unsupported,Other}},Req,State}.
+    ?gsreply(Ref,Socket),
+    {ok,Req,State};
+handle_call(next_response,Ref,Req,State=#state{xhr_cache=[],xhr_ref=undefined}) ->
+    %% Delay reply
+    {ok,Req,State#state{xhr_ref=Ref}};
+handle_call(next_response,Ref,Req,State=#state{xhr_cache=[],xhr_ref=OldRef}) ->
+    %% Had waiting xhr_poll request, cancel first one
+    ?gsreply(OldRef,{error,double_poll}),
+    %% Delay reply
+    {ok,Req,State#state{xhr_ref=Ref}};
+handle_call(next_response,Ref,Req,State=#state{xhr_cache=[Next|Rest],xhr_ref=undefined}) ->
+    ?gsreply(Ref,Next),
+    {ok,Req,State#state{xhr_cache=Rest}};
+handle_call(Other,Ref,Req,State) ->
+    ?lwarn("Got request: ~p, when state is: ~p",[Other,?DUMP_REC(state,State)]),
+    ?gsreply(Ref,{error,{bad_call,Other}}),
+    {ok,Req,State}.
 
 process_mmd(Msg,From,Req,State=#state{chans=Chans}) ->
     case channel_mgr:process_remote(Chans,From,Msg) of
-        {NewChans,Dispatch} -> jsreply(Dispatch,Req,State#state{chans=NewChans});
-        NewChans -> jsreply([],Req,State#state{chans=NewChans})
+        {NewChans,Dispatch} -> reply(Dispatch,Req,State#state{chans=NewChans});
+        NewChans -> reply([],Req,State#state{chans=NewChans})
     end.
 
 process_ws(#channel_create{id=Id,service='$mmd',body=?map(Map)}, Req,State=#state{cfg=MMDCfg}) ->
     NewMMDCfg = mmd_cfg:update(MMDCfg,lists:map(fun({A,B}) -> {p6str:mkatom(A),B} end,Map)),
     ?trc(State,"Updated MMDCfg: ~w -> ~w",[?DUMP_REC(mmd_cfg,MMDCfg),?DUMP_REC(mmd_cfg,NewMMDCfg)]),
-    jsreply(#channel_close{id=Id,body=ok},Req,State#state{cfg=NewMMDCfg});
+    reply(#channel_close{id=Id,body=ok},Req,State#state{cfg=NewMMDCfg});
 
 process_ws(Msg,Req,State=#state{chans=Chans,cfg=Cfg}) ->
     {NewChans,ForMe} = channel_mgr:process_local(Chans,Msg,Cfg),
-    jsreply(ForMe,Req,State#state{chans=NewChans}).
+    reply(ForMe,Req,State#state{chans=NewChans}).
 
-jsreply([],Req,State) -> {ok,Req,State,hibernate};
-jsreply(Messages,Req,State) when is_list(Messages) ->
-    lists:foreach(fun(M)-> self() ! {dispatch,M} end, Messages),
-    {noreply,Req,State};
-jsreply(Msg,Req,State) ->
-    case catch json_encode:encode(Msg) of
-        {ok,JSON} ->
-	    ?trc(State,"Sending: ~p",[JSON]),
-	    {reply,{text,JSON},Req,State,hibernate};
-        Error ->
-            ?lerr("Error encoding: ~p~nError message: ~p",[Msg,Error]),
-	    {reply,{text,mkError(Msg,"Error encoding response, contact support.")},Req,State,hibernate}
-    end.
+reply([], Req, State) -> {ok,Req,State,hibernate};
+reply(Msgs,Req,State=#state{xhr=true}) -> xhr_reply(Msgs,Req,State);
+reply(Msgs,Req,State) -> ws_reply(Msgs,Req,State).
 
-mkError(#channel_create{id=Id},Msg) -> mkError(Id,Msg);
-mkError(#channel_close{id=Id},Msg) -> mkError(Id,Msg);
-mkError(#channel_message{id=Id},Msg) -> mkError(Id,Msg);
-mkError(Id,Msg) -> mkError(Id,?SERVICE_ERROR,Msg).
+%% Single message in a list, don't queue
+ws_reply([Msg],Req,State) -> ws_reply(Msg,Req,State);
 
-mkError(Id,Code,Msg) ->
-    json:encode(
-      {obj,[
-            {close,p6str:mkbin(uuid:to_string(Id))},
-            {body,{obj,[{<<"_mmd_error">>,Code},{msg,p6str:mkbin(Msg)}]}}
-           ]
-      }).
+%% List of messages, dispatch first and queue rest
+%% TODO: See if you can send multiple websocket messages at a time
+ws_reply([Msg|Rest],Req,State) -> %% List 'o messages, dispatch 1 and queue rest
+    Me = self(),
+    lists:foreach(fun(M)-> Me ! {dispatch,M} end, Rest),
+    ws_reply(Msg,Req,State);
+
+%%Single message
+ws_reply(Msg,Req,State=#state{type=Type}) ->
+    {reply,{Type,encode(Msg,Type)},Req,State,hibernate}.
+
+
+encode(Msg,binary) -> mmd_encode:encode(Msg);
+encode(Msg,text) -> okget:ok(json_encode:encode(Msg)).
+
+
+xhr_reply(Msgs,Req,State=#state{xhr_cache=Cache,xhr_ref=undefined}) ->
+    Append = case is_list(Msgs) of
+		 true -> Msgs;
+		 false -> [Msgs]
+	     end,
+    {ok,Req,State#state{xhr_cache=lists:append(Cache,Append)},hibernate};
+xhr_reply([H|Rest],Req,State=#state{type=Type,xhr_cache=Cache,xhr_ref=Ref}) ->
+    ?gsreply(Ref,{Type,H}),
+    {ok,Req,State#state{xhr_cache=lists:append(Cache,Rest),xhr_ref=undefined}};
+xhr_reply(Msg,Req,State=#state{type=Type,xhr_cache=[],xhr_ref=Ref}) ->
+    ?gsreply(Ref,{Type,Msg}),
+    {ok,Req,State#state{xhr_ref=undefined}}.
+
+    
