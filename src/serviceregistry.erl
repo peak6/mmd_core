@@ -38,6 +38,22 @@ service_call(_Client,#channel_create{originator=O,body=Body}) when is_binary(Bod
         Other -> {reply,?error(?INVALID_REQUEST,p6str:mkbin(Other))}
     end.
 
+do_action(register, O, ?array(Names)) ->
+    case lists:foldl(fun (Name, Acc) ->
+			     case validateName(Name) of
+				 ok -> Acc;
+				 O -> [p6str:mkbin({Name, O}) | Acc]
+			   end
+		   end, [], Names) of
+	[] ->
+	    lists:foreach(fun (Name) ->
+				  services:regGlobal(O, p6str:mkatom(Name), 0)
+			  end, Names),
+	    ok;
+	Errors ->
+	    ?error(?INVALID_REQUEST, ?array(Errors))
+    end;
+
 do_action(register, O, Name) ->
     case validateName(Name) of
         ok -> services:regGlobal(O, p6str:mkatom(Name), 0);
@@ -54,6 +70,11 @@ do_action(registerUnique, O, {'$array', [Name, Key]}) ->
         ok -> services:regUnique(O, p6str:mkatom(Name), [unique, Key2]);
         Other -> ?error(?INVALID_REQUEST,p6str:mkbin(Other))
     end;
+
+do_action(unregister, O, ?array(Names)) ->
+    lists:foreach(fun (Name) ->
+			  services:unregGlobal(O, p6str:mkatom(Name))
+		  end, Names);
 do_action(unregister, O, Name) ->
     services:unregGlobal(O, p6str:mkatom(Name));
 do_action(_Action, _O, _Name) ->
