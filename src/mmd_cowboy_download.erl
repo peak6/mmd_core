@@ -11,12 +11,13 @@ init({_Proto,http}, Req, Cfg) ->
 
 terminate(_Req,_State) -> ok.
 
-handle(OrigReq,Cfg) ->
-    {Props,Req} = cowboy_http_req:qs_vals(OrigReq),
-    {Path,_} = ?get(raw_path,OrigReq),
-    Text = p6props:get(<<"data">>,Props),
+handle(Req=#http_req{raw_path=Path,
+    		urldecode={URLDecFun, URLDecArg}},Cfg) ->
+    {ok, Data,_} = cowboy_http_req:body(Req),     
+    [{_, Text}] = cowboy_http:x_www_form_urlencoded(Data, fun(Bin) -> URLDecFun(Bin, URLDecArg) end),
+%    io:fwrite("In handle,Text=~p",[Text]),    
     Headers = [{<<"Content-Type">>,mimetypes:filename(Path)}],
-    {ok,NewReq} = cowboy_http_req:reply(200,Headers,Text,Req),
+    {ok,NewReply} = cowboy_http_req:reply(200,Headers,Text,Req),
     
-    {ok,NewReq,Cfg}.
+    {ok,NewReply,Cfg}.
     
