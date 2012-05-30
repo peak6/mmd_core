@@ -25,7 +25,7 @@ handle(OrigReq,Cfg) ->
     case Path of
 	<<"/_hostname">> -> ok_txt(p6str:mkbin(get_hostname(Req)),Req,Cfg);
 	<<"/_p6init.js">> -> ok_js([<<"var _p6MMDVars = ">>,mk_init(Cfg,Req)],Req,Cfg);
-        <<"/wsurl">> -> ok_txt(get_wsurl(Cfg),Req,Cfg);
+        <<"/wsurl">> -> ok_txt(get_wsurl(Req,Cfg),Req,Cfg);
         <<"/wsurl.js">> -> ok_js([<<"var p6MMDVars = ">>,mk_init(Cfg,Req)],Req,Cfg);
         _ -> handle_fs(Req,Cfg)
     end.
@@ -94,14 +94,19 @@ send_file(File,Req,Cfg) ->
     end.
 
 
-get_wsurl(#htcfg{port=Port}) ->
-    Host = case application:get_env(websocket_hostname) of
-	       undefined ->
-		   {ok, H} = inet:gethostname(),
-		   H;
-	       {ok, H} ->
-		   H
-	   end,
+get_wsurl(Req,#htcfg{port=Port}) ->
+    Host = 
+	case ?get(raw_host,Req) of %% Host client specified
+	    {<<>>,_} ->
+		case application:get_env(websocket_hostname) of %% config default
+		    undefined ->
+			{ok, H} = inet:gethostname(), %% Who I think I am
+			H;
+		    {ok, H} ->
+			H
+		end;
+	    {Name,_} -> Name
+	end,
     io_lib:format("ws://~s:~p/_ws",[Host,Port]).
 
 
@@ -132,7 +137,7 @@ get_content(Path) ->
 
 mk_init(Cfg=#htcfg{root=Root},Req) ->
     [
-     <<"{\n \"websocketURL\": \"">>,get_wsurl(Cfg),
+     <<"{\n \"websocketURL\": \"">>,get_wsurl(Req,Cfg),
      <<"\",\n \"client\": \"">>,p6str:mkbin(get_hostname(Req)),
      <<"\",\n \"environment\": \"">>,p6str:mkbin(p6init:getEnv()),
      <<"\",\n \"components\": {">>, gen_components(Cfg),
