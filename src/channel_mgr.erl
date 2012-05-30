@@ -98,10 +98,11 @@ process_local(State, M=#channel_create{id=Id}, Cfg, Data) ->
     end;
 
 process_local(State, M=#channel_message{id=Id}, _Cfg, _Data) ->
-    case ets:lookup_element(?tid(State), Id, 3) of
+    case ets:lookup(?tid(State), Id) of
         badarg -> {State, noSuchChannel(Id)};
-        Pid -> fire(Pid,M),
-	       {State, []}
+        [#chan{remote=Pid}] ->
+	    fire(Pid,M),
+	    {State, []}
     end;
 
 process_local(State, M=#channel_close{id=Id}, _Cfg, _Data) ->
