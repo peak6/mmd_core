@@ -99,7 +99,7 @@ process_local(State, M=#channel_create{id=Id}, Cfg, Data) ->
 
 process_local(State, M=#channel_message{id=Id}, _Cfg, _Data) ->
     case ets:lookup(?tid(State), Id) of
-        badarg -> {State, noSuchChannel(Id)};
+        [] -> {State, noSuchChannel(Id)};
         [#chan{remote=Pid}] ->
 	    fire(Pid,M),
 	    {State, []}
@@ -107,7 +107,7 @@ process_local(State, M=#channel_message{id=Id}, _Cfg, _Data) ->
 
 process_local(State, M=#channel_close{id=Id}, _Cfg, _Data) ->
     case ets:lookup(?tid(State),Id) of
-        badarg ->
+        [] ->
             ?lwarn("Attempt to close unknown channel: ~p",[Id]),
             {State, noSuchChannel(Id)};
 	[#chan{remote=Pid,id=Id,ref=Ref}] ->
@@ -122,7 +122,7 @@ process_local_set_data(State, M, Data) ->
 
 process_local_set_data(State, M=#channel_message{id=Id}, _Cfg, Data) ->
     case ets:lookup(?tid(State), Id) of
-        badarg -> {State, noSuchChannel(Id)};
+        [] -> {State, noSuchChannel(Id)};
         [Ch = #chan{remote = Pid}] -> fire(Pid,M),
 	       ets:insert(?tid(State), Ch#chan{data = Data}),
 	       {State, []}
