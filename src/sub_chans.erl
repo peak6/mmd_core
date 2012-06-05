@@ -75,7 +75,7 @@ handle_call({mmd, From, Msg}, _From, Chans) ->
 			 Subs = subs(Topic),
 			 channel_mgr:process_local_set_data(
 			   NewChans,
-			   mmd_msg:mkReply(CC, Subs),
+			   mmd_msg:mkReply(CC, ?map([{added, ?array(Subs)}])),
 			   {Topic, Subs});
 		       _ ->
 			 channel_mgr:process_local(
