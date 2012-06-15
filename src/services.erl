@@ -233,7 +233,7 @@ dispatchDiff(State=#state{chans=Chans}) ->
 		  {[], []} -> false;
 		  {A, []} -> {true, ?map([{added, ?array(A)}])};
 		  {[], R} -> {true, ?map([{removed, ?array(R)}])};
-		  {A, R} -> ?map([{added, ?array(A)}, {removed,?array(R)}])
+		  {A, R} -> {true, ?map([{added, ?array(A)}, {removed,?array(R)}]})
 	      end
       end, Chans),
     All.
