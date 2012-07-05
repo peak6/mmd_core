@@ -50,34 +50,12 @@ handle_error(Other,Req,Cfg) -> reply(500,[],["Unexpected error: ~p",Other],Req,C
 
 handle_fs(Req,Cfg=#htcfg{root=_Root}) ->
     {Path,Req} = ?get(path,Req),
-    case resolve_links(Path,Req,Cfg) of
-	{ok,dir,Dir} -> handle_dir(Dir,Req,Cfg);
-	{ok,file,File} -> handle_file(File,Req,Cfg);
-	{redirect,file,To} -> redirect(To,Req,Cfg);
-	{redirect,dir,To} -> redirect(ensure_trailing_slash(To),Req,Cfg);
-	Other ->
-	    handle_error(Other,Req,Cfg)
+    F = p6str:mkbin("~s/~s",[_Root,filename:join(Path)]),
+    case p6file:fileType(F) of
+	dir -> handle_dir(F,Req,Cfg);
+	file -> send_file(F,Req,Cfg);
+	Other -> handle_error(Other,Req,Cfg)
     end.
-
-resolve_links(Path,_Req,#htcfg{root=Root}) ->
-    OrigFile = filename:join([Root|Path]),
-    case p6file:fileType(OrigFile) of
-	E = {error,_} -> E;
-	Type ->
-	    case p6file:real_path(Root,Path) of
-		{ok,OrigFile} -> {ok,Type,OrigFile};
-		{ok,NewFile} ->
-		    case binary:split(NewFile,Root) of
-			[<<>>,OrigFile] -> {ok,Type,OrigFile};
-			[<<>>,Redir] -> {redirect,Type,Redir};
-			[NewFile] -> {error,eaccess}
-		    end;
-		Other -> Other
-	    end
-    end.
-
-handle_file(Path,Req,Cfg) ->
-    send_file(Path,Req,Cfg).
 
 handle_dir(Path,Req,Cfg) ->
     {RawPath,_Req} = ?get(raw_path,Req),
