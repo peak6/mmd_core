@@ -49,7 +49,10 @@ handle_error({error,eaccess}, Req, Cfg) -> reply(401,[],"Access denied",Req,Cfg)
 handle_error(Other,Req,Cfg) -> reply(500,[],["Unexpected error: ~p",Other],Req,Cfg).
 
 handle_fs(Req,Cfg=#htcfg{root=_Root}) ->
-    {Path,Req} = ?get(path,Req),
+    Path = case ?get(path,Req) of
+	       {[],_} -> [<<"index.html">>];
+	       {P,_} -> P
+	   end,
     F = p6str:mkbin("~s/~s",[_Root,filename:join(Path)]),
     case p6file:fileType(F) of
 	dir -> handle_dir(F,Req,Cfg);
