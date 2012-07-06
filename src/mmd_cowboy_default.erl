@@ -69,11 +69,10 @@ handle_dir(Path,Req,Cfg) ->
 
 send_file(File,Req,Cfg) ->
     ?trace(Cfg,"Sending: ~p",[File]),
-    case file:read_file(File) of
+    case mmd_web_cache:get_file(File,r) of
 	{ok,Bin} -> reply(200,[{<<"Content-Type">>,mimetypes:filename(File)}],Bin,Req,Cfg);
 	Other -> handle_error(Other,Req,Cfg)
     end.
-
 
 get_wsurl(Req,#htcfg{port=Port}) ->
     Host = 

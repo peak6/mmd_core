@@ -37,7 +37,7 @@
 -include("mmd.hrl").
 -include("mmd_cfg.hrl").
 
--record(state, {mmdCfg,owner,remote,id,type,svc}).
+-record(state, {mmdCfg,owner,remote,id,type,svc,lastTime}).
 -record(create,{mmdCfg,owner,msg,remote,createTime=p6time:nowAs(ms)}).
 %%%===================================================================
 %%% API
@@ -101,10 +101,11 @@ handle_info({'DOWN',_Ref,process,Owner,_Reason},#state{owner=Owner,remote=Remote
     {stop,normal,nostate};
 
 handle_info({mmd,From,CC=#channel_close{}}, State) ->
-    fire(resolveDest(From,State),CC),
+    fire(resolveDest(From,logTime(From,CC,State)),CC),
     {stop,normal,nostate};
 
-handle_info({mmd,From,Msg}, State) ->
+handle_info({mmd,From,Msg}, OState) ->
+    State = logTime(From,Msg,OState),
     fire(resolveDest(From,State),Msg),
     {noreply,State};
 
@@ -120,6 +121,20 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
+logTime(_,_,State) -> State.
+% logTime(From,Msg,State=#state{svc=Svc,lastTime=LT,remote=Remote,id=Id}) ->
+%     Type = element(1,Msg),
+%     NT = p6time:nowAs(ms),
+%     Who = case From of
+% 	      Remote -> service;
+% 	      _ -> client
+% 	  end,
+%     case LT of
+% 	undefined -> ?linfo("Created: ~p",[Id]);
+% 	_ -> ?linfo("svc: ~p, type: ~p, from: ~p, time: ~p, chan: ~p",[Svc,Type,Who,NT-LT,Id])
+%     end,
+%     State#state{lastTime=NT}.
+    
 resolveDest(From,#state{owner=From,remote=R}) -> R;
 resolveDest(From,#state{owner=O,remote=From}) -> O;
 resolveDest(From,#state{owner=O,remote={mod,_}}) when From == self() -> O;
@@ -171,7 +186,7 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{serv
                                     fire(Owner,#channel_message{id=Id,body= <<"$ack$">>})
                             end
                     end,
-                    {noreply,#state{owner=Owner,remote=Pid,id=Id,type=client,svc=Svc}};
+                    {noreply,logTime(Owner,CC,#state{owner=Owner,remote=Pid,id=Id,type=client,svc=Svc})};
                 {error,retry} -> nextTimeout(Create);
                 Other -> ?lwarn("Failed to create channel, reason: ~p, targets: ~p",[Other,Entries]),
                          fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_ERROR,"Service '~p' failure: ~p",[Svc,Other])}),
