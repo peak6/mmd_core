@@ -119,7 +119,7 @@ handle_call({take,Socket}, _From, State) ->
     SName = p6str:sock_to_str(Socket),
     case verifySocket(Socket) of
         ok ->
-            inet:setopts(Socket,[{active,once},{nodelay, true}, {recbuf,50*1024*1024},{sndbuf,50*1024*1024}]),
+            inet:setopts(Socket,[{active,once},{nodelay, true}, {recbuf,128*1024*1024},{sndbuf,128*1024*1024}]),
             con_tracker:registerConnection(self(),socket,SName,Socket),
             {reply,ok,State#state{socket=Socket,sockName=SName}};
         Other ->
