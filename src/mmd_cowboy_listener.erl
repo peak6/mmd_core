@@ -1,8 +1,8 @@
 -module(mmd_cowboy_listener).
 
 -include("mmd_cowboy_common.hrl").
-
 -export([start_link/1]).
+
 
 -define(megs(N), p6mem:convert(N,mb,bytes)).
 
@@ -30,6 +30,7 @@ start_link(Port) ->
 		       {[<<"call">>,'...'], mmd_cowboy_call,Cfg},
 		       {[<<"_call">>,'...'], mmd_cowboy_call,Cfg},
 		       {[<<"_xhr_poll">>,'...'], mmd_cowboy_xhr_poll,Cfg},
+                       {[<<"_mmd_flags.js">>], mmd_web_flags,Cfg},
 		       {'_', mmd_cowboy_default, Cfg}
 		      ]
 		}

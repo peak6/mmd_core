@@ -1,0 +1,1 @@
+-record(cache_entry,{file,mod_local,mod_gmtstr,type,content}).

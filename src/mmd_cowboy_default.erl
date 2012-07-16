@@ -12,10 +12,10 @@
 %% See the License for the specific language governing permissions and
 %% limitations under the License.
 -module(mmd_cowboy_default).
--define(WSLOOP(WS,Cfg,SESSION),?MODULE:wsLoop(WS,Cfg,SESSION)).
 -export([init/3, handle/2, terminate/2]).
 -include("mmd_cowboy_common.hrl").
 -include_lib("kernel/include/inet.hrl").
+-define(trc(Flags,Fmt,Args), case mmd_web_flags:has(trace,Flags) of true -> ?ldebug(Fmt,Args); _ -> ok end).
 
 init({_Proto,http}, Req, Cfg) ->
     {ok,Req,Cfg}.
@@ -34,19 +34,15 @@ terminate(_Req,_State) -> ok.
 
 redirect(To,Req,Cfg) ->
     {QS,_} = ?get(raw_qs,Req),
-    {OP,_} = ?get(raw_path,Req),
     case QS of
-        <<>> -> From = OP,
-                ToLocation = To;
-        _ -> From = [OP,$?,QS],
-             ToLocation = [To,$?,QS]
+        <<>> -> ToLocation = To;
+        _ -> ToLocation = [To,$?,QS]
     end,
-    ?trace(Cfg,"Redirecting: ~s -> ~s",[p6str:mkbin(From),p6str:mkbin(ToLocation)]),
     reply(307,[{<<"Location">>,[ToLocation]}],[<<"Redirect: ">>,ToLocation],Req,Cfg).
 
 handle_error({error,enoent},Req,Cfg) -> not_found(Req,Cfg);
 handle_error({error,eaccess}, Req, Cfg) -> reply(401,[],"Access denied",Req,Cfg);
-handle_error(Other,Req,Cfg) -> reply(500,[],["Unexpected error: ~p",Other],Req,Cfg).
+handle_error(Other,Req,Cfg) -> reply(500,[],p6str:mkio("Unexpected error: ~p",[Other]),Req,Cfg).
 
 handle_fs(Req,Cfg=#htcfg{root=_Root}) ->
     Path = case ?get(path,Req) of
@@ -67,11 +63,45 @@ handle_dir(Path,Req,Cfg) ->
 	_ -> redirect([RawPath,<<"/">>],Req,Cfg)
     end.
 
+%% Used for sending raw files, skipping the cache
+send_from_fs(Flags,File,Req,Cfg) ->
+    ?trc(Flags,"Sending directly from filesystem: ~p",[File]),
+    case file:read_file(File) of
+        {ok,Bin} -> reply(200,
+                          [{<<"Content-Type">>,mimetypes:filename(File)}],
+                          Bin,
+                          Req,
+                          Cfg);
+        Other -> handle_error(Other,Req,Cfg)
+    end.
+
+send_from_cache(Flags,#cache_entry{file=File,mod_gmtstr=CacheTime,content=Bin,type=Type},Req,Cfg) ->
+    case mmd_web_flags:has(always,Flags) of
+        true -> reply(200,[{<<"Content-Type">>,Type}],Bin,Req,Cfg);
+        false ->
+            case ?hdr('If-Modified-Since',Req) of
+                {CacheTime,_} -> 
+                    ?trc(Flags,"Not modified, sending 304: ~p",[File]),
+                    reply(304,[],<<>>,Req,Cfg);
+                {Other,_} -> 
+                    ?trc(Flags,"Sending update: ~p, server time: ~p, browser time: ~p",[File,CacheTime,Other]),
+                    reply(200,[
+                               {<<"Content-Type">>,Type},
+                               {<<"Last-Modified">>,CacheTime}
+                              ],Bin,Req,Cfg)
+            end
+    end.
+
 send_file(File,Req,Cfg) ->
-    ?trace(Cfg,"Sending: ~p",[File]),
-    case mmd_web_cache:get_file(File,r) of
-	{ok,Bin} -> reply(200,[{<<"Content-Type">>,mimetypes:filename(File)}],Bin,Req,Cfg);
-	Other -> handle_error(Other,Req,Cfg)
+    {Flags,_} = cowboy_http_req:cookie(<<"mmd">>,Req,<<>>),
+    case mmd_web_flags:has(raw,Flags) of
+        true -> 
+            send_from_fs(Flags,File,Req,Cfg);
+        false ->
+            case mmd_web_cache:get_file(File) of
+                {ok,Entry=#cache_entry{}} -> send_from_cache(Flags,Entry,Req,Cfg);
+                Other -> handle_error(Other,Req,Cfg)
+            end
     end.
 
 get_wsurl(Req,#htcfg{port=Port}) ->
