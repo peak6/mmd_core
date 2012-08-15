@@ -24,7 +24,7 @@ transformValues(MFA) ->
 
 regUnique(Name,SortKey) -> regUnique(self(),Name,SortKey).
 regUnique(Pid,Name,SortKey) ->
-    case p6dmap:addGlobal(?P6DMAP,Pid,p6str:mkatom(Name),SortKey) of
+    case p6dmap:addGlobal(?P6DMAP,Pid,p6str:mkservicename(Name),SortKey) of
         ok ->  ?linfo("Registered unique global: ~p (~p) with key: ~p",[Name,Pid,SortKey]),
                ok;
         Other -> ?linfo("Failed to register global service ~p (~p) with key: ~p -- ~p",[Name,Pid,SortKey,Other]),
@@ -35,7 +35,7 @@ regGlobal(Names) when is_list(Names) -> lists:foreach(fun(N)->regGlobal(N) end, 
 regGlobal(Name) -> regGlobal(Name,0).
 regGlobal(Name,Load) -> regGlobal(self(),Name,Load).
 regGlobal(Pid,Name,Load) ->
-    case p6dmap:addGlobal(?P6DMAP,Pid,p6str:mkatom(Name),{Load,cpu_load:util()}) of
+    case p6dmap:addGlobal(?P6DMAP,Pid,p6str:mkservicename(Name),{Load,cpu_load:util()}) of
         ok -> ?linfo("Registered global: ~p (~p)",[Name,Pid]),
               ok;
         Other -> ?linfo("Failed to register global service ~p (~p,~p) : ~p",[Name,Pid,Load,Other]),
@@ -44,14 +44,14 @@ regGlobal(Pid,Name,Load) ->
 
 regLocal(Names) when is_list(Names) -> lists:foreach(fun(Name) -> ok = regLocal(Name) end, Names);
 regLocal(Name) ->
-    case p6dmap:addLocal(?P6DMAP,self(),p6str:mkatom(Name),local) of
+    case p6dmap:addLocal(?P6DMAP,self(),p6str:mkservicename(Name),local) of
         ok -> ?linfo("Registered local: ~p (~p)",[Name,self()]), ok;
         Other -> ?linfo("Failed to register global service ~p (~p) : ~p",[Name,self(),Other]),
                  Other
     end.
 
 unregGlobal(Pid, Name) ->
-    case p6dmap:delGlobal(?P6DMAP, Pid, p6str:mkatom(Name)) of
+    case p6dmap:delGlobal(?P6DMAP, Pid, p6str:mkservicename(Name)) of
 	ok ->
 	    ?linfo("Unregistered global ~p (~p)", [Name, Pid]),
 	    ok;
@@ -64,7 +64,7 @@ updateSvcLoad(Name,SvcLoad) -> updateSvcLoad(self(),Name,SvcLoad).
 updateSvcLoad(Pid,Name,SvcLoad) -> updateLoad(Pid,Name,{SvcLoad,cpu_load:util()}).
 
 updateLoad(Name,Load) -> updateLoad(self(),Name,Load).
-updateLoad(Pid,Name,Load={_,_}) -> p6dmap:set(?P6DMAP,Pid,p6str:mkatom(Name),Load).
+updateLoad(Pid,Name,Load={_,_}) -> p6dmap:set(?P6DMAP,Pid,p6str:mkservicename(Name),Load).
 
 getDM() -> whereis(?P6DMAP).
 
@@ -85,7 +85,7 @@ find(Name) when is_binary(Name) ->
     catch
         Type:Reason -> ?lwarn("Failed to convert: ~p in to existing atom {~p,~p}",[Name,Type,Reason]), []
     end;
-find(Name) -> p6dmap:getWithDM(?P6DMAP,p6str:mkatom(Name)).
+find(Name) -> p6dmap:getWithDM(?P6DMAP,p6str:mkservicename(Name)).
 
 findBalanced(Name) ->
     case find(Name) of
