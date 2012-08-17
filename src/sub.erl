@@ -66,9 +66,17 @@ handle_call({mmd, From, Msg}, _From, Chans) ->
          {NewChans, CC=#channel_create{type=sub, body=Raw, id=ChanId}} ->
              case mmd_decode:decode(Raw) of
                  {?array(Topics), _} ->
-                     add_topics(From, ChanId, Topics, CC, NewChans);
+                     add_topics(From, ChanId, Topics, false, CC, NewChans);
                  {<<Topic/binary>>, _} ->
-                     add_topics(From, ChanId, [Topic], CC, NewChans);
+                     add_topics(From, ChanId, [Topic], false, CC, NewChans);
+                 {?map(M), _} ->
+                     case p6props:any([<<"topic">>, <<"local_only">>], M) of
+                         [<<Topic/binary>>, LocalOnly]
+                           when is_boolean(LocalOnly) ->
+                             add_topics(From, ChanId, [Topic], LocalOnly, CC,
+                                        NewChans);
+                         _ -> bad_sub(CC, NewChans)
+                     end;
                  _ ->
                      bad_sub(CC, NewChans)
              end;
@@ -104,11 +112,15 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-add_topics(_From, _ChanId, [], _CC, Chans) -> Chans;
-add_topics(From, ChanId, [<<T/binary>> | Topics], CC, Chans) ->
-    p6dmap:addGlobal(subs, From, T, {self(), ChanId}),
-    add_topics(From, ChanId, Topics, CC, Chans);
-add_topics(_From, _ChanId, _Topics, CC, Chans) ->
+add_topics(_From, _ChanId, [], _LocalOnly, _CC, Chans) -> Chans;
+add_topics(From, ChanId, [<<T/binary>> | Topics], LocalOnly, CC, Chans) ->
+    DmapAdd = case LocalOnly of
+                  true -> fun p6dmap:addLocal/4;
+                  false -> fun p6dmap:addGlobal/4
+              end,
+    DmapAdd(subs, From, T, {self(), ChanId}),
+    add_topics(From, ChanId, Topics, LocalOnly, CC, Chans);
+add_topics(_From, _ChanId, _Topics, _LocalOnly, CC, Chans) ->
     bad_sub(CC, Chans).
 
 bad_sub(CC, Chans) ->
@@ -117,6 +129,8 @@ bad_sub(CC, Chans) ->
           Chans,
           mmd_msg:mkError(CC,
                           ?INVALID_REQUEST,
-                          <<"'sub' must be initiated with a string or list "
-                            "of strings of topics to subscribe to">>)),
+                          <<"'sub' must be initiated with a string topic, "
+                            "a list of strings of topics to subscribe to, "
+                            "or a map of "
+                            "{\"topic\": Topic, \"local_only\": Bool}">>)),
     Chans2.
