@@ -8,7 +8,7 @@
 
 -behaviour(gen_server2).
 -define(SERVER,?MODULE).
--define(SERVICE,'service.calls').
+-define(SERVICE,<<"service.calls">>).
 
 -define(TABLE,?MODULE).
 
@@ -16,9 +16,9 @@
 -include("mmd.hrl").
 
 incr(?SERVICE) -> ok;
-incr(Service) -> cast({incr,p6str:mkatom(Service)}).
+incr(Service) -> cast({incr,p6str:mkservicename(Service)}).
 
-clear(Service) -> cast({clear,p6str:mkatom(Service)}).
+clear(Service) -> cast({clear,p6str:mkservicename(Service)}).
 
 
 %%%===================================================================

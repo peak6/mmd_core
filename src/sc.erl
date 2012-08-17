@@ -64,7 +64,7 @@ nextMsg(Socket,Timeout) ->
 
 register(ServiceName) ->
     {ok,P} = connect(),
-    sc:call(P,serviceregistry,p6str:mkatom(ServiceName)),
+    sc:call(P,serviceregistry,p6str:mkservicename(ServiceName)),
     timer:sleep(500),
     io:format("~p\n",[sc:allMsgs(P)]),
     {ok,P}.
