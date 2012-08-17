@@ -79,12 +79,6 @@ service2Nodes() ->
     dict:to_list(lists:foldl(fun([S,N],Dict) -> dict:append(S,N,Dict) end, dict:new(), p6dmap:keyToNodes(?P6DMAP))).
 
 %% Returns list of DM,Pid,Val
-find(Name) when is_binary(Name) ->
-    try binary_to_existing_atom(Name,utf8) of
-	    Atom -> find(Atom)
-    catch
-        Type:Reason -> ?lwarn("Failed to convert: ~p in to existing atom {~p,~p}",[Name,Type,Reason]), []
-    end;
 find(Name) -> p6dmap:getWithDM(?P6DMAP,p6str:mkservicename(Name)).
 
 findBalanced(Name) ->
