@@ -157,27 +157,31 @@ nextTimeout(Create=#create{owner=Owner,createTime=CT,remote=RPid,msg=#channel_cr
 
 
 initChannel(Create=#create{owner=Owner,msg=CC=#channel_create{id=Id,service=Svc},remote=Pid}) when is_pid(Pid) ->
-    case fire(Pid,CC) of
+    Service = p6str:mkservicename(Svc),
+    CCProper = CC#channel_create{service=Service},
+    case fire(Pid,CCProper) of
         {ok,Pid} ->
 	    monitor(process,Pid),
-            create_tracker:incr(Svc),
-            {noreply,#state{owner=Owner,remote=Pid,id=Id,type=client,svc=Svc}};
+            create_tracker:incr(Service),
+            {noreply,#state{owner=Owner,remote=Pid,id=Id,type=client,svc=Service}};
         Other -> ?lwarn("Failed to setup directed channel to: ~p, reason: ~p",[Pid,Other]),
-                 nextTimeout(Create)
+                 nextTimeout(Create#create{msg=CCProper})
     end;
 
 initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{service=Svc,id=Id}}) ->
-    case services:findBalanced(Svc) of
+    Service = p6str:mkservicename(Svc),
+    CCProper = CC#channel_create{service=Service},
+    case services:findBalanced(Service) of
         [] ->
             fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_NOT_FOUND,"Service '~p' not found.",[Svc])}),
-            ?linfo("~p asked for non-existant service: ~p",[Owner,Svc]),
+            ?linfo("~p asked for non-existent service: ~p",[Owner,Svc]),
             {stop,normal,nostate};
         Entries ->
-            case fire(Entries,CC) of
+            case fire(Entries,CCProper) of
                 {ok,Pid} ->
 		    monitor(process,Pid),
-                    create_tracker:incr(Svc),
-                    case CC#channel_create.type of
+                    create_tracker:incr(Service),
+                    case CCProper#channel_create.type of
                         call -> ok;
                         sub ->
                             case MMDCfg#mmd_cfg.ackSub of
@@ -186,10 +190,10 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{serv
                                     fire(Owner,#channel_message{id=Id,body= <<"$ack$">>})
                             end
                     end,
-                    {noreply,logTime(Owner,CC,#state{owner=Owner,remote=Pid,id=Id,type=client,svc=Svc})};
-                {error,retry} -> nextTimeout(Create);
+                    {noreply,logTime(Owner,CCProper,#state{owner=Owner,remote=Pid,id=Id,type=client,svc=Service})};
+                {error,retry} -> nextTimeout(Create#create{msg=CCProper});
                 Other -> ?lwarn("Failed to create channel, reason: ~p, targets: ~p",[Other,Entries]),
-                         fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_ERROR,"Service '~p' failure: ~p",[Svc,Other])}),
+                         fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_ERROR,"Service '~p' failure: ~p",[Service,Other])}),
                          {stop,normal,nostate}
             end
     end.
