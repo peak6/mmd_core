@@ -99,8 +99,7 @@ init([]) ->
                 ?CHILD(sub_chans,worker),
                 ?CHILD(pub,worker),
                 ?CHILD(mmd_autodiscover,worker),
-                ?CHILD(socket_sup,supervisor),
-		?CHILD(script_launcher_sup, supervisor)		
+                ?CHILD(socket_sup,supervisor)
                ] ++ Http ++ MmdTcpClientSpecs ++ ProxySpecs,
     {ok, {SupFlags,Children}}.
 
