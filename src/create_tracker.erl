@@ -16,9 +16,9 @@
 -include("mmd.hrl").
 
 incr(?SERVICE) -> ok;
-incr(Service) -> cast({incr,p6str:mkservicename(Service)}).
+incr(Service) -> cast({incr,p6str:to_lower_bin(Service)}).
 
-clear(Service) -> cast({clear,p6str:mkservicename(Service)}).
+clear(Service) -> cast({clear,p6str:to_lower_bin(Service)}).
 
 
 %%%===================================================================

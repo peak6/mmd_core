@@ -13,7 +13,7 @@ handle(OrigReq,Cfg) ->
 %%    ?trace(Cfg,"Request: ~p",[?DUMP_REC(http_req,OrigReq)]),
     {Props,Req} = cowboy_http_req:qs_vals(OrigReq),
     {PathInfo,_} = cowboy_http_req:path_info(Req),
-    Svc = p6str:mkservicename(filename:join(PathInfo)),
+    Svc = p6str:to_lower_bin(filename:join(PathInfo)),
     CC = mkCreateChannel(Svc,Props),
     case p6props:has(<<"debug">>,Props) of
         true ->

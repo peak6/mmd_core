@@ -65,7 +65,7 @@ uuid(Id) ->
     end.
 
 body(Body) -> toErl(Body).
-svc(Bin) -> p6str:mkservicename(Bin).
+svc(Bin) -> p6str:to_lower_bin(Bin).
 
 transTimeout(undefined) -> 3000;
 transTimeout(Time) -> Time.

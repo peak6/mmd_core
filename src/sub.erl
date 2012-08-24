@@ -63,13 +63,17 @@ handle_call({mmd, From, Msg}, _From, Chans) ->
                      ?linfo("Dunno what to do with: ~p",[Other]),
                      NewChans2
              end;
-         {NewChans, CC=#channel_create{type=sub, body=Raw, id=ChanId}} ->
-             case mmd_decode:decode(Raw) of
-                 {?array(Topics), _} ->
+         {NewChans, CC=#channel_create{type=sub, body=Body, id=ChanId}} ->
+	     case Body of
+		 Raw = ?raw(_) -> {Obj,_} = mmd_decode:decode(Raw);
+		 Obj -> Obj
+	     end,
+             case mmd_decode:decode(Obj) of
+                 ?array(Topics) ->
                      add_topics(From, ChanId, Topics, false, CC, NewChans);
-                 {<<Topic/binary>>, _} ->
+                 <<Topic/binary>> ->
                      add_topics(From, ChanId, [Topic], false, CC, NewChans);
-                 {?map(M), _} ->
+                 ?map(M) ->
                      case p6props:any([<<"topic">>, <<"local_only">>], M) of
                          [<<Topic/binary>>, LocalOnly]
                            when is_boolean(LocalOnly) ->

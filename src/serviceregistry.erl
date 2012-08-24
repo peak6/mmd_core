@@ -29,12 +29,12 @@
 
 service_call(_Client,#channel_create{originator=O, %% This is the ORIGIN of the call (ie: the socket)
 				     body=?map([{ActionBin, Value}])}) ->
-    Action = p6str:mkservicename(ActionBin),
+    Action = p6str:to_lower_bin(ActionBin),
     {reply,do_action(Action,O,Value)};
 
 service_call(_Client,#channel_create{originator=O,body=Body}) when is_binary(Body) ->
     case validateName(Body) of
-        ok -> {reply,services:regGlobal(O,p6str:mkservicename(Body),0)};
+        ok -> {reply,services:regGlobal(O,p6str:to_lower_bin(Body),0)};
         Other -> {reply,?error(?INVALID_REQUEST,p6str:mkbin(Other))}
     end.
 
@@ -47,7 +47,7 @@ do_action(register, O, ?array(Names)) ->
 		   end, [], Names) of
 	[] ->
 	    lists:foreach(fun (Name) ->
-				  services:regGlobal(O, p6str:mkservicename(Name), 0)
+				  services:regGlobal(O, p6str:to_lower_bin(Name), 0)
 			  end, Names),
 	    ok;
 	Errors ->
@@ -56,7 +56,7 @@ do_action(register, O, ?array(Names)) ->
 
 do_action(register, O, Name) ->
     case validateName(Name) of
-        ok -> services:regGlobal(O, p6str:mkservicename(Name), 0);
+        ok -> services:regGlobal(O, p6str:to_lower_bin(Name), 0);
         Other -> ?error(?INVALID_REQUEST,p6str:mkbin(Other))
     end;
 
@@ -67,16 +67,16 @@ do_action(registerUnique, O, {'$array', [Name, Key]}) ->
 	   end,
 
     case validateName(Name) of
-        ok -> services:regUnique(O, p6str:mkservicename(Name), [unique, Key2]);
+        ok -> services:regUnique(O, p6str:to_lower_bin(Name), [unique, Key2]);
         Other -> ?error(?INVALID_REQUEST,p6str:mkbin(Other))
     end;
 
 do_action(unregister, O, ?array(Names)) ->
     lists:foreach(fun (Name) ->
-			  services:unregGlobal(O, p6str:mkservicename(Name))
+			  services:unregGlobal(O, p6str:to_lower_bin(Name))
 		  end, Names);
 do_action(unregister, O, Name) ->
-    services:unregGlobal(O, p6str:mkservicename(Name));
+    services:unregGlobal(O, p6str:to_lower_bin(Name));
 do_action(_Action, _O, _Name) ->
     ?error(?INVALID_REQUEST, <<"Invalid action or invalid args for action">>).
 

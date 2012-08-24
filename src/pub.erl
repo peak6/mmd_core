@@ -65,12 +65,19 @@ handle_call({mmd, From, Msg=#channel_create{type=call, body=Raw}},
             {reply, ok, Chans2}
      end;
 
-handle_call({mmd, From, Msg=#channel_create{type=sub, body=Raw}},
+handle_call({mmd, From, Msg=#channel_create{type=sub, body=Body}},
             _From, Chans) ->
-    Topic = case mmd_decode:decode(Raw) of
-                {<<T/binary>>, _} -> T;
-                _ -> undefined
-            end,
+    case Body of
+	Raw = ?raw(_) ->
+	    Topic = case mmd_decode:decode(Raw) of
+			{<<T/binary>>, _} -> T;
+			_ -> undefined
+		    end;
+	Topic when is_binary(Topic) ->
+	    Topic;
+	_Other -> Topic = undefined
+    end,
+	    
     case channel_mgr:process_remote(Chans, From, Msg, Topic) of
          {NewChans, CC} ->
             Chans3 =

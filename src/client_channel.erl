@@ -157,7 +157,7 @@ nextTimeout(Create=#create{owner=Owner,createTime=CT,remote=RPid,msg=#channel_cr
 
 
 initChannel(Create=#create{owner=Owner,msg=CC=#channel_create{id=Id,service=Svc},remote=Pid}) when is_pid(Pid) ->
-    Service = p6str:mkservicename(Svc),
+    Service = p6str:to_lower_bin(Svc),
     CCProper = CC#channel_create{service=Service},
     case fire(Pid,CCProper) of
         {ok,Pid} ->
@@ -169,7 +169,7 @@ initChannel(Create=#create{owner=Owner,msg=CC=#channel_create{id=Id,service=Svc}
     end;
 
 initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{service=Svc,id=Id}}) ->
-    Service = p6str:mkservicename(Svc),
+    Service = p6str:to_lower_bin(Svc),
     CCProper = CC#channel_create{service=Service},
     case services:findBalanced(Service) of
         [] ->

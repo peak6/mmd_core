@@ -64,10 +64,10 @@ reg_action(Pid, Action, SvcName) ->
     gen_server:call(Pid, {reg, Action, SvcName, M}).
 
 register(Pid, SvcName) ->
-    reg_action(Pid, register, p6str:mkservicename(SvcName)).
+    reg_action(Pid, register, p6str:to_lower_bin(SvcName)).
 
 unregister(Pid, SvcName) ->
-    reg_action(Pid, unregister, p6str:mkservicename(SvcName)).
+    reg_action(Pid, unregister, p6str:to_lower_bin(SvcName)).
 
 chan_add(State=#state{chans=Chans}, Id, Pid) ->
     MR = case Pid of
