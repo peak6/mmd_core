@@ -28,6 +28,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+-export([add_topics/6]).
+
 -include_lib("p6core/include/logger.hrl").
 -include("mmd.hrl").
 -include_lib("p6core/include/dmap.hrl").

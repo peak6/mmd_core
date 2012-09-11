@@ -28,6 +28,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+-export([pub/2]).
+
 -include_lib("p6core/include/logger.hrl").
 -include("mmd.hrl").
 -include_lib("p6core/include/dmap.hrl").
@@ -77,7 +79,7 @@ handle_call({mmd, From, Msg=#channel_create{type=sub, body=Body}},
 	    Topic;
 	_Other -> Topic = undefined
     end,
-	    
+
     case channel_mgr:process_remote(Chans, From, Msg, Topic) of
          {NewChans, CC} ->
             Chans3 =
