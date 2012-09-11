@@ -23,16 +23,17 @@ init({_Proto,http}, Req, Cfg) ->
 handle(OrigReq,Cfg) ->
     {Path,Req} = ?get(raw_path,OrigReq),
     case Path of
-	<<"/_hostname">> -> ok_txt(p6str:mkbin(get_hostname(Req)),Req,Cfg);
-	<<"/_p6init.js">> -> ok_js([<<"var _p6MMDVars = ">>,mk_init(Cfg,Req)],Req,Cfg);
+        <<"/_hostname">> -> ok_txt(p6str:mkbin(get_hostname(Req)),Req,Cfg);
+        <<"/_p6init.js">> -> ok_js([<<"var _p6MMDVars = ">>,mk_init(Cfg,Req)],Req,Cfg);
         <<"/wsurl">> -> ok_txt(get_wsurl(Req,Cfg),Req,Cfg);
         <<"/wsurl.js">> -> ok_js([<<"var p6MMDVars = ">>,mk_init(Cfg,Req)],Req,Cfg);
-        _ -> handle_fs(Req,Cfg)
+        _ -> handle_fs(Path,Req,Cfg)
     end.
 
 terminate(_Req,_State) -> ok.
 
-redirect(To,Req,Cfg) ->
+redirect(OrigTo,Req,Cfg) ->
+    To = re:replace(OrigTo,<<"/index\\.html">>,<<"/">>),
     {QS,_} = ?get(raw_qs,Req),
     case QS of
         <<>> -> ToLocation = To;
@@ -44,24 +45,49 @@ handle_error({error,enoent},Req,Cfg) -> not_found(Req,Cfg);
 handle_error({error,eaccess}, Req, Cfg) -> reply(401,[],"Access denied",Req,Cfg);
 handle_error(Other,Req,Cfg) -> reply(500,[],p6str:mkio("Unexpected error: ~p",[Other]),Req,Cfg).
 
-handle_fs(Req,Cfg=#htcfg{root=_Root}) ->
-    Path = case ?get(path,Req) of
-	       {[],_} -> [<<"index.html">>];
-	       {P,_} -> P
-	   end,
-    F = p6str:mkbin("~s/~s",[_Root,filename:join(Path)]),
+handle_fs(<<$/>>,Req,Cfg) ->
+    send_file(<<"/index.html">>,Req,Cfg); % url is /
+
+handle_fs(RawPath,Req,Cfg=#htcfg{root=Root}) ->
+    F = p6file:join(Root,RawPath),
     case p6file:fileType(F) of
-	dir -> handle_dir(F,Req,Cfg);
-	file -> send_file(F,Req,Cfg);
+	dir ->
+            case binary:last(RawPath) of
+                $/ -> send_file(p6file:join(RawPath,<<"index.html">>),Req,Cfg);%handle_dir(binary:part(RawPath,0,size(RawPath)-1),Req,Cfg);
+                _ -> redirect(<<RawPath/binary,$/>>,Req,Cfg) % directories not ending in / must be redirected
+            end;
+	file -> send_file(RawPath,Req,Cfg);
 	Other -> handle_error(Other,Req,Cfg)
     end.
 
-handle_dir(Path,Req,Cfg) ->
-    {RawPath,_Req} = ?get(raw_path,Req),
-    case binary:last(RawPath) of
-	$/ -> send_file(filename:join([Path,<<"index.html">>]),Req,Cfg);
-	_ -> redirect([RawPath,<<"/">>],Req,Cfg)
+
+send_file(RawPath,Req,Cfg=#htcfg{root=Root}) ->
+    case p6str:ends_with(RawPath,<<".html">>) of
+        true ->
+            RSZ = size(Root),
+            case p6file:real_path(Root,RawPath) of
+                {ok,Full = <<Root:RSZ/binary,RawPath/binary>>} -> maybe_send(Full,Req,Cfg);
+                {ok,<<Root:RSZ/binary,O/binary>>} -> redirect(O,Req,Cfg);%?ldebug("redirect: ~p",[O]);
+                Err={error,_} -> handle_error(Err,Req,Cfg)
+            end;
+        false -> maybe_send(p6file:join(Root,RawPath),Req,Cfg)
     end.
+
+maybe_send(File,Req,Cfg) ->
+						% File = p6file:join(Root,RawPath),
+    {Flags,_} = cowboy_http_req:cookie(<<"mmd">>,Req,<<>>),
+    case mmd_web_flags:has(raw,Flags) of
+        true ->
+            send_from_fs(Flags,File,Req,Cfg);
+        false ->
+            case mmd_web_cache:get_file(File) of
+                {ok,Entry=#cache_entry{}} -> send_from_cache(Flags,Entry,Req,Cfg);
+                {miss,_Entry} -> send_from_fs(Flags,File,Req,Cfg);
+                Other -> handle_error(Other,Req,Cfg)
+            end
+    end.
+
+
 
 %% Used for sending raw files, skipping the cache
 send_from_fs(Flags,File,Req,Cfg) ->
@@ -75,15 +101,15 @@ send_from_fs(Flags,File,Req,Cfg) ->
         Other -> handle_error(Other,Req,Cfg)
     end.
 
-send_from_cache(Flags,#cache_entry{file=File,mod_gmtstr=CacheTime,content=Bin,type=Type},Req,Cfg) ->
+send_from_cache(Flags,#cache_entry{file=File,cache_time=CacheTime,content=Bin,type=Type},Req,Cfg) ->
     case mmd_web_flags:has(always,Flags) of
         true -> reply(200,[{<<"Content-Type">>,Type}],Bin,Req,Cfg);
         false ->
             case ?hdr('If-Modified-Since',Req) of
-                {CacheTime,_} -> 
+                {CacheTime,_} ->
                     ?trc(Flags,"Not modified, sending 304: ~p",[File]),
                     reply(304,[],<<>>,Req,Cfg);
-                {Other,_} -> 
+                {Other,_} ->
                     ?trc(Flags,"Sending update: ~p, server time: ~p, browser time: ~p",[File,CacheTime,Other]),
                     reply(200,[
                                {<<"Content-Type">>,Type},
@@ -92,20 +118,9 @@ send_from_cache(Flags,#cache_entry{file=File,mod_gmtstr=CacheTime,content=Bin,ty
             end
     end.
 
-send_file(File,Req,Cfg) ->
-    {Flags,_} = cowboy_http_req:cookie(<<"mmd">>,Req,<<>>),
-    case mmd_web_flags:has(raw,Flags) of
-        true -> 
-            send_from_fs(Flags,File,Req,Cfg);
-        false ->
-            case mmd_web_cache:get_file(File) of
-                {ok,Entry=#cache_entry{}} -> send_from_cache(Flags,Entry,Req,Cfg);
-                Other -> handle_error(Other,Req,Cfg)
-            end
-    end.
 
 get_wsurl(Req,#htcfg{port=Port}) ->
-    Host = 
+    Host =
 	case ?get(raw_host,Req) of %% Host client specified
 	    {<<>>,_} ->
 		case application:get_env(websocket_hostname) of %% config default

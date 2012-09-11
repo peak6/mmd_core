@@ -30,17 +30,17 @@ start_link() ->
 clear() -> gen_server:call(?SERVER,clear).
 
 
-get_file(File) -> 
+get_file(File) ->
     case ets:lookup(?TABLE,File) of
 	[E=#cache_entry{}] -> {ok,E};
 	[] -> cache_miss(File,not_cached)
     end.
-	    
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 
-				     
+
 init([]) ->
     ?TABLE = ets:new(?TABLE,[named_table,protected,{keypos,#cache_entry.file}]),
     register(?MINIFIER,spawn_link(fun()->minifier() end)),
@@ -67,13 +67,16 @@ handle_cast({store,File},State) ->
 	    ?lwarn("Failed to store: ~p, reason: ~p",[File,Other])
     end,
     {noreply,State};
-handle_cast({update_min,File,Bin},State) ->
-    case ets:update_element(?TABLE,File,{#cache_entry.content,Bin}) of
+handle_cast({update_min,File,CacheTime,Bin},State) ->
+    case ets:update_element(?TABLE,File,
+			    [{#cache_entry.content,Bin},
+			     {#cache_entry.cache_time,cowboy_clock:rfc2109(CacheTime)}]
+			   ) of
 	true -> ?ldebug("Minify stored: ~p, minified size: ~p",[File,size(Bin)]);
 	false -> ?ldebug("No record matching: ~p",[File])
     end,
     {noreply,State}.
-    
+
 handle_info(Info, State) ->
     ?linfo("Unexpected handle_info(~p, ~p)",[Info,State]),
     {noreply, State}.
@@ -87,7 +90,7 @@ code_change(_OldVsn, State, _Extra) ->
 changed(File,OrigTime,NewTime) ->
     ?ldebug("Change detected: ~p, was: ~p, is: ~p",[File,OrigTime,NewTime]),
     store(File).
-                                       
+
 cache_miss(File,Reason) ->
     ?ldebug("Cache miss (~p): ~p",[Reason,File]),
     store(File),
@@ -108,6 +111,7 @@ scan() ->
               ?TABLE),
     ?MODULE:scan().
 
+add_sec(T) -> calendar:gregorian_seconds_to_datetime(calendar:datetime_to_gregorian_seconds(T)+1).
 load(File) ->
     case p6file:lastMod(File) of
 	{ok,Time} ->
@@ -115,7 +119,7 @@ load(File) ->
 		{ok,Bin} ->
                     Type = mimetypes:filename(File),
                     GMT = cowboy_clock:rfc2109(Time),
-		    {ok,#cache_entry{file=File,mod_local=Time,type=Type,mod_gmtstr=GMT,content=Bin}};
+		    {ok,#cache_entry{file=File,mod_local=Time,type=Type,cache_time=GMT,content=Bin}};
 		Other -> Other
 	    end;
 	Other -> Other
@@ -133,9 +137,11 @@ minifier() ->
     receive
 	{yui,File} ->
 	    case yui_minify(File) of
-		{ok,Bin} -> update_min(File,Bin);
+		{ok,Bin} ->
+		    {ok,Time} = p6file:lastMod(File),
+		    update_min(File,add_sec(Time),Bin);
 		{error,{Code,Text}} ->
-		    ?lwarn("Failed to minify: ~p, exit code: ~p, error message:~n~s",[File,Code,Text]);
+		    ?lwarn("Failed to minify: ~p, exit code: ~p, error message: ~s",[File,Code,Text]);
 		Other ->
 		    ?ldebug("Error: ~p",[Other])
 	    end;
@@ -144,10 +150,10 @@ minifier() ->
     end,
     ?MODULE:minifier().
 
-update_min(File,Bin) -> gen_server:cast(?SERVER,{update_min,File,Bin}).
+update_min(File,Time,Bin) -> gen_server:cast(?SERVER,{update_min,File,Time,Bin}).
 
 yui_minify(File) ->
-    case p6exec:execArgs(?MINIFY_TIMEOUT,"java",["-jar","apps/mmd_core/priv/yuicompressor-2.4.7.jar",
+    case p6exec:execArgs(?MINIFY_TIMEOUT,"java",["-jar","deps/mmd_core/priv/yuicompressor-2.4.7.jar",
 						 "--preserve-semi",
 						 "--disable-optimizations",
 						 File]) of
