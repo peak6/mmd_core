@@ -153,7 +153,8 @@ minifier() ->
 update_min(File,Time,Bin) -> gen_server:cast(?SERVER,{update_min,File,Time,Bin}).
 
 yui_minify(File) ->
-    case p6exec:execArgs(?MINIFY_TIMEOUT,"java",["-jar","deps/mmd_core/priv/yuicompressor-2.4.7.jar",
+    JarFile = filename:join([code:priv_dir(mmd_core), "yuicompressor-2.4.7.jar"]),
+    case p6exec:execArgs(?MINIFY_TIMEOUT,"java",["-jar", JarFile,
 						 "--preserve-semi",
 						 "--disable-optimizations",
 						 File]) of
