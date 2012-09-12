@@ -28,6 +28,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
+-export([listen/6]).
+
 -include_lib("p6core/include/logger.hrl").
 -include("mmd.hrl").
 -include_lib("p6core/include/dmap.hrl").
@@ -70,15 +72,15 @@ handle_call({mmd, From, Msg}, _From, Chans) ->
 	     end,
              case mmd_decode:decode(Obj) of
                  ?array(Topics) ->
-                     add_topics(From, ChanId, Topics, false, CC, NewChans);
+                     listen(From, ChanId, Topics, false, CC, NewChans);
                  <<Topic/binary>> ->
-                     add_topics(From, ChanId, [Topic], false, CC, NewChans);
+                     listen(From, ChanId, [Topic], false, CC, NewChans);
                  ?map(M) ->
                      case p6props:any([<<"topic">>, <<"local_only">>], M) of
                          [<<Topic/binary>>, LocalOnly]
                            when is_boolean(LocalOnly) ->
-                             add_topics(From, ChanId, [Topic], LocalOnly, CC,
-                                        NewChans);
+                             listen(From, ChanId, [Topic], LocalOnly, CC,
+                                    NewChans);
                          _ -> bad_sub(CC, NewChans)
                      end;
                  _ ->
@@ -116,15 +118,15 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-add_topics(_From, _ChanId, [], _LocalOnly, _CC, Chans) -> Chans;
-add_topics(From, ChanId, [<<T/binary>> | Topics], LocalOnly, CC, Chans) ->
+listen(_From, _ChanId, [], _LocalOnly, _CC, Chans) -> Chans;
+listen(From, ChanId, [<<T/binary>> | Topics], LocalOnly, CC, Chans) ->
     DmapAdd = case LocalOnly of
                   true -> fun p6dmap:addLocal/4;
                   false -> fun p6dmap:addGlobal/4
               end,
     DmapAdd(subs, From, T, {self(), ChanId}),
-    add_topics(From, ChanId, Topics, LocalOnly, CC, Chans);
-add_topics(_From, _ChanId, _Topics, _LocalOnly, CC, Chans) ->
+    listen(From, ChanId, Topics, LocalOnly, CC, Chans);
+listen(_From, _ChanId, _Topics, _LocalOnly, CC, Chans) ->
     bad_sub(CC, Chans).
 
 bad_sub(CC, Chans) ->
