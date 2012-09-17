@@ -25,64 +25,58 @@
 -behavior(mmd_service).
 
 -export([service_call/2]).
-
-
-service_call(_Client,#channel_create{originator=O, %% This is the ORIGIN of the call (ie: the socket)
-				     body=?map([{ActionBin, Value}])}) ->
-    Action = p6str:to_lower_bin(ActionBin),
-    {reply,do_action(Action,O,Value)};
+%% originator=O is the ORIGIN of the call (ie: the socket)
+service_call(_Client,#channel_create{originator=O, body=?map(Props)}) ->
+    {reply,do_action(O,Props)};
 
 service_call(_Client,#channel_create{originator=O,body=Body}) when is_binary(Body) ->
-    case validateName(Body) of
-        ok -> {reply,services:regGlobal(O,p6str:to_lower_bin(Body),0)};
-        Other -> {reply,?error(?INVALID_REQUEST,p6str:mkbin(Other))}
+    {reply,do_action(O,[{<<"name">>,Body},{<<"action">>,<<"register">>}])}.
+
+do_action(Originator, Props) ->
+    [Names,Action,Tags] = p6props:anyAndMap([
+					     {<<"name">>,fun to_lower_list/1},
+					     {<<"action">>,fun p6str:mkatom/1},
+					     {<<"tag">>,fun to_lower_list/1}
+					    ],Props),
+    ?ldebug("Props: ~p\nTags: ~p",[Props,Tags]),
+    case validate(Names) of
+	[] -> do_action(Action,Originator,Names,Tags);
+	Other -> ?error(?INVALID_REQUEST,p6str:mkbin(Other))
     end.
 
-do_action(register, O, ?array(Names)) ->
-    case lists:foldl(fun (Name, Acc) ->
-			     case validateName(Name) of
-				 ok -> Acc;
-				 O -> [p6str:mkbin({Name, O}) | Acc]
-			   end
-		   end, [], Names) of
-	[] ->
-	    lists:foreach(fun (Name) ->
-				  services:regGlobal(O, p6str:to_lower_bin(Name), 0)
-			  end, Names),
-	    ok;
-	Errors ->
-	    ?error(?INVALID_REQUEST, ?array(Errors))
+to_lower_list(Items) when is_list(Items) -> lists:map(fun p6str:to_lower_bin/1,Items);
+to_lower_list(Item) -> to_lower_list([Item]).
+
+validate(undefined) -> {error,name_not_specified};
+validate(Names) ->
+    ?ldebug("Validating: ~p",[Names]),
+    lists:foldl(fun
+		    (<<>>,Acc) -> [{error,empty_name}|Acc]; 
+		    (_,Acc) -> Acc
+		end, [], Names).
+
+do_action(register, O, Names,Tags ) ->
+    Results = lists:foldl(fun(Name,Acc) ->
+				  case services:regGlobal(O,Name,Tags) of
+				      ok -> Acc;
+				      Other -> [{Name,Other}|Acc]
+				  end
+			  end,
+			  [],
+			  Names),
+    case Results of
+	[] -> ok;
+	Other -> ?error(?INVALID_REQUEST,Other)
     end;
 
-do_action(register, O, Name) ->
-    case validateName(Name) of
-        ok -> services:regGlobal(O, p6str:to_lower_bin(Name), 0);
-        Other -> ?error(?INVALID_REQUEST,p6str:mkbin(Other))
-    end;
-
-do_action(registerUnique, O, {'$array', [Name, Key]}) ->
-    Key2 = case Key of
-	       <<"$node">> -> node();
-	       _ -> Key
-	   end,
-
-    case validateName(Name) of
-        ok -> services:regUnique(O, p6str:to_lower_bin(Name), [unique, Key2]);
-        Other -> ?error(?INVALID_REQUEST,p6str:mkbin(Other))
-    end;
-
-do_action(unregister, O, ?array(Names)) ->
+do_action(unregister, O, Names ,_Tags) ->
     lists:foreach(fun (Name) ->
 			  services:unregGlobal(O, p6str:to_lower_bin(Name))
 		  end, Names);
-do_action(unregister, O, Name) ->
-    services:unregGlobal(O, p6str:to_lower_bin(Name));
-do_action(_Action, _O, _Name) ->
+
+do_action(_Action, _O, _Names,_Tags) ->
+    ?ldebug("Action: ~p, Originator: ~p, Names: ~p, Tags: ~p",[_Action,_O,_Names,_Tags]),
     ?error(?INVALID_REQUEST, <<"Invalid action or invalid args for action">>).
 
 
-validateName(<<>>) -> {error,empty_name};
-validateName([]) -> {error,empty_name};
-validateName('') ->{error,empty_name};
-validateName(_) -> ok.
 %% vim: ts=4:sts=4:sw=4:et:sta:

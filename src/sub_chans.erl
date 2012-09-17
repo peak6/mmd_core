@@ -22,7 +22,6 @@
 -module(sub_chans).
 
 -export([start_link/0]).
--export([xformEntryAdd/1]).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
@@ -34,10 +33,8 @@
 start_link() ->
     gen_server:start_link({local, sub_chans}, ?MODULE, [], []).
 
-xformEntryAdd(E) -> E.
-
 init([]) ->
-    p6dmap:new(subs, ?MODULE),
+    p6dmap:ensure(subs),
     services:regLocal('sub.chans'),
     timer:send_interval(100, update_subs),
     {ok, channel_mgr:new()}.

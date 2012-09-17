@@ -19,13 +19,14 @@
 -export([start_link/0]).
 
 -export([util/0,avg1/0,avg5/0,avg15/0]).
+-export([util/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
 -include_lib("p6core/include/logger.hrl").
-
+-define(DMAP,cpu_load_map).
 
 -define(SERVER, ?MODULE).
 
@@ -40,17 +41,24 @@ util() -> call(util).
 avg1() -> cpu_sup:avg1().
 avg5() -> cpu_sup:avg5().
 avg15() -> cpu_sup:avg15().
+
+util(Nodes) when is_list(Nodes) -> [{N,L} || [N,_,L] <- p6dmap:any(?DMAP,Nodes)];
+util(Node) -> util([Node]).
+
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 
 init([]) ->
+    p6dmap:new(?DMAP),
     case os:type() of
 	{unix,linux}->
 	    application:start(os_mon),
-	    proc_lib:spawn_link(fun() -> updateLoop(p6props:getApp('cpu_load.updateInterval',1000)) end),
+	    timer:send_interval(p6props:getApp('cpu_load.updateInterval',1000),update),
 	    {ok, genLoad()};
 	Unknown->
+	    p6dmap:addGlobal(?DMAP,node(),99),
 	    ?lwarn("Unsupported os '~p', assuming 99% load",[Unknown]),
 	    {ok,99}
     end.
@@ -61,10 +69,12 @@ handle_call(Request, From, Load) ->
     ?lwarn("Unexpected handle_call(~p, ~p, ~p)",[Request,From,Load]),
     {reply, ok, Load}.
 
-handle_cast({update,Load},_) -> {noreply,Load};
 handle_cast(Msg, Load) ->
     ?lwarn("Unexpected handle_cast(~p, ~p)",[Msg,Load]),
     {noreply, Load}.
+
+handle_info(update,_) ->
+    {noreply,genLoad()};
 
 handle_info(Info, Load) ->
     ?lwarn("Unexpected handle_info(~p, ~p)",[Info,Load]),
@@ -80,13 +90,9 @@ code_change(_OldVsn, Load, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-updateLoop(SleepTime) ->
-    timer:sleep(SleepTime),
-    cast({update,genLoad()}),
-    updateLoop(SleepTime).
-
 genLoad() ->
-    cpu_sup:util().
+    Load = cpu_sup:util(),
+    p6dmap:set(?DMAP,node(),Load),
+    Load.
 
 call(Term) -> gen_server:call(?SERVER,Term).
-cast(Term) -> gen_server:cast(?SERVER,Term).

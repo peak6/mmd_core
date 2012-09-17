@@ -3,7 +3,7 @@
 {application, mmd_core,
  [
   {description, "Magic Middle Dude"},
-  {vsn, "2.0.0"},
+  {vsn, "3"},
   {registered, []},
   {applications, [
                   kernel,

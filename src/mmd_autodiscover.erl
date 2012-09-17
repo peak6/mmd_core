@@ -19,15 +19,15 @@
          terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE).
+-define(PING_TIME,30000).  %Ping every 30 seconds
 
 -include_lib("p6core/include/p6core.hrl").
 
--record(state, {sock,env,addr,port,ping,pingCount=0,nodeCount=0,ignore=[],timer}).
--record(ping,{env,node,cookie}).
--define(BASE_TIMEOUT,4000). %% Means initial standalone ping time is 5 sec BASE+(nodes * 1000)
+-record(state, {ignore,node,env,cookie,version,sock,addr,port,ping}).
+-record(ping,{env,node,cookie,version}).
 
 ping() ->
-    ?SERVER ! forcePing.
+    ?SERVER ! send_ping.
 
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
@@ -39,14 +39,20 @@ init([]) ->
             ignore;
         {ok,{Addr,Port}} ->
             Env = p6init:getEnv(),
-            Ping = #ping{env=Env,node=node(),cookie=erlang:get_cookie()},
+	    {_,_,Vsn} = lists:keyfind(mmd_core,1,application:loaded_applications()),
+	    Cookie = erlang:get_cookie(),
+            Ping = #ping{env=Env,node=node(),cookie=Cookie,version=Vsn},
             {ok,Sock} = gen_udp:open(Port,[binary,
                                            {active,true},
                                            {reuseaddr,true},
                                            {multicast_ttl,64},
                                            {add_membership,{Addr,{0,0,0,0}}}
                                           ]),
-            {ok,sendPing(#state{env=Env,sock=Sock,port=Port,ping=Ping,addr=Addr})}
+	    
+	    State = #state{node=node(),cookie=Cookie,version=Vsn,ignore=[],env=Env,sock=Sock,port=Port,ping=Ping,addr=Addr},
+	    send_ping(State),
+	    timer:send_interval(?PING_TIME,send_ping),
+            {ok,State}
     end.
 
 handle_call(Request, From, State) ->
@@ -57,56 +63,22 @@ handle_cast(Msg, State) ->
     ?lwarn("Unexpected handle_cast(~p, ~p)",[Msg,State]),
     {noreply,State}.
 
-
-handle_info({udp,Sock,FromIP,Port,Bin},State=#state{sock=Sock,env=MyEnv,port=Port,ignore=Ignore}) ->
-    MyNode = node(),
-    MyCookie = erlang:get_cookie(),
-    case catch binary_to_term(Bin) of
-        #ping{node=MyNode} -> {noreply,State}; %% Ignore our own ping
-        #ping{env=MyEnv,node=Node,cookie=MyCookie} ->
-            case lists:member(Node,nodes()) of
-                true -> {noreply,State};
-                false ->
-                    ?linfo("Joining: ~s, with cookie: ~p",[Node,erlang:get_cookie()]),
-                    mmd:tempJoin(Node),
-                    {noreply,adjustTimer(State#state{ignore=[]})}
-            end;
-        Ping = #ping{} ->
-            case lists:member(Ping,Ignore) of
-                true -> {noreply,State};
-                false ->
-                    ?linfo("Ignoring ping from: ~s, my env: ~s/~p, received: ~p",
-                           [p6str:ip_port_to_str(FromIP,Port), MyEnv,MyCookie,?DUMP_REC(ping,Ping)]),
-                    {noreply,State#state{ignore=[Ping|Ignore]}}
-            end;
-        Other -> ?lerr("Ignoring multicast packet: ~p, due to: ~p from: ~s",
-                       [Bin,Other,p6str:ip_port_to_str(FromIP,Port)]),
-                 {noreply,State}
+handle_info({udp,Sock,FromIP,Port,Bin},State=#state{sock=Sock,port=Port,ignore=Ignore}) ->
+    case parse(Bin) of
+	{ok,Ping} -> {noreply,process(Ping,State)};
+	{error,Reason} ->
+	    IPP = {FromIP,Port},
+	    case lists:member(IPP,Ignore) of
+		true -> {noreply,State};
+		false -> 
+		    ?lwarn("Unrecognizable ping packet from: ~s, parse result: ~p",[p6str:ip_port_to_str(FromIP,Port),Reason]),
+		    {noreply,ignore(IPP,State)}
+	    end
     end;
 
-handle_info({udp,Sock,FromIP,FromPort,Bin},State) ->
-    Pkt =
-	case catch binary_to_term(Bin) of
-	    {error,Reason} -> {error,Reason,Bin};
-	    Other -> Other
-	end,
-
-    ?lwarn("Unable to handle packet from ~p/~p, packet: ~p, my state: ~p",
-	   [Sock,p6str:ip_port_to_str(FromIP,FromPort), Pkt, ?DUMP_REC(state,State)]),
+handle_info(send_ping,State) ->
+    send_ping(State),
     {noreply,State};
-
-handle_info(forcePing,State=#state{pingCount=PC}) ->
-    ?linfo("Sending ping: ~p",[PC]),
-    {noreply,sendPing(State)};
-
-handle_info(sendPing,State) ->
-    {noreply,sendPing(State)};
-
-
-handle_info(Msg, State={state,Sock,Env,Addr,Port,Ping,PingCount}) ->
-    NewState = #state{sock=Sock,env=Env,addr=Addr,port=Port,ping=Ping,pingCount=PingCount,ignore=[]},
-    ?linfo("Transformed state from: ~p to: ~p",[State,NewState]),
-    handle_info(Msg,NewState);
 
 handle_info(Info, State) ->
     ?lwarn("Unexpected handle_info(~p, ~p)",[Info,State]),
@@ -118,27 +90,49 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-sendPing(State=#state{sock=Sock,addr=Addr,port=Port,ping=Ping,pingCount=PC}) ->
-    case PC of
-        0 -> ?linfo("Pinging ~p with ~p",[p6str:ip_port_to_str(Addr,Port),Ping]);
-        _ -> ok
-    end,
-    ok = gen_udp:send(Sock,Addr,Port,term_to_binary(Ping)),
-    adjustTimer(State#state{pingCount=PC+1}).
 
-adjustTimer(State=#state{timer=T,nodeCount=OrigNC}) ->
-    case length(nodes())+1 of
-        OrigNC -> State;
-        NC ->
-            case T of
-                undefined -> ok;
-                Ref ->
-                    {ok,cancel} = timer:cancel(Ref)
-            end,
-            Timeout = ?BASE_TIMEOUT+(NC*1000),
-            ?linfo("Node count changed (~p), adjusting ping interval to: ~p",[NC,Timeout]),
-            {ok,TRef} = timer:send_interval(Timeout,sendPing),
-            State#state{timer=TRef,nodeCount=NC}
+send_ping(#state{sock=Sock,addr=Addr,port=Port,ping=Ping}) ->
+    ok = gen_udp:send(Sock,Addr,Port,term_to_binary(Ping)).
+
+ignore(Item,State=#state{ignore=Ignore}) -> State#state{ignore=[Item|Ignore]}.
+
+parse(Bin) ->
+    case catch binary_to_term(Bin) of
+	P=#ping{} -> {ok,P};
+	{'EXIT',{badarg,_}} -> {error,unparsable};
+	OtherTerm -> {error,{bad_term,OtherTerm}}
     end.
 
+%% Ignore on Env mismatch
+process(Ping=#ping{env=Env,node=Node},State=#state{env=MyEnv}) when Env =/= MyEnv -> 
+    ?linfo("Ignoring remote MMD node: ~p due to environment mismatch, theirs: ~p, mine: ~p",[Node,Env,MyEnv]),
+    ignore(Ping,State);
 
+%% Ignore on cookie mismatch
+process(Ping=#ping{cookie=Cookie,node=Node},State=#state{cookie=MyCookie}) when Cookie =/= MyCookie ->
+    ?linfo("Ignoring remote MMD node: ~p due to cookie mismatch, theirs: ~p, mine: ~p",[Node,Cookie,MyCookie]),
+    ignore(Ping,State);
+
+%% Version mismatch, we require exact version matches
+process(Ping=#ping{version=Version,node=Node},State=#state{version=MyVersion}) when Version =/= MyVersion ->
+    ?linfo("Ignoring remote MMD node: ~p due to version mismatch, theirs: ~p, mine: ~p",[Node,Version,MyVersion]),
+    ignore(Ping,State);
+
+%% We saw our own ping
+process(#ping{node=MyNode},State=#state{node=MyNode}) -> 
+    State;
+
+%% I have a ping and none of the previous patterns matched, so we're good
+process(Ping=#ping{node=Node},State) ->
+    case lists:member(Node,nodes()) of 
+	true -> 
+	    State;
+	false ->
+	    ?ldebug("Received ping: ~p, connecting",[Ping]),
+	    mmd:join(Node),
+	    State
+    end;
+
+process(Other,State) ->
+    ?ldebug("Unrecognized ping, adding: ~p to ignore list",[Other]),
+    ignore(Other,State).

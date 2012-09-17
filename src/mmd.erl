@@ -31,6 +31,7 @@ conStatN(Field,Min) when is_atom(Field) ->
                     (_) -> false
                  end,
                  conStat(Field)).
+
 conStat() ->
     [{X,process_info(P)} || X={P,_} <- connections()].
 
@@ -45,11 +46,7 @@ join(Nodes) when is_list(Nodes) ->
 
 join(Node) when Node == node() ->
     ok;
-join(Node) ->
-    p6auto_cluster:addNode(Node).
-
-tempJoin(Node) ->
-    net_kernel:connect(Node).
+join(Node) -> net_kernel:connect(Node).
 
 leave(Node) ->
     p6auto_cluster:delNode(Node).

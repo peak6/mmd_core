@@ -8,43 +8,28 @@
 -define(SERVER, ?MODULE).
 -define(WATCHERS,service_watchers).
 -define(P6DMAP,service_map).
+-define(MYTAGS,service_tags).
 
 -record(state, {known=sets:new(), chans=channel_mgr:new()}).
 
-xformEntryAdd(E=#dm{val={SL,HL},node=Node}) ->
-    W = service_node_weight:getNodeWeight(Node),
-    E#dm{val={W,SL,HL}};
-xformEntryAdd(E=#dm{val={_,SL,HL},node=Node}) ->
-    W = service_node_weight:getNodeWeight(Node),
-    E#dm{val={W,SL,HL}};
-xformEntryAdd(E) -> E.
-
-transformValues(MFA) ->
-    p6dmap:xformValues(?P6DMAP,MFA).
-
-regUnique(Name,SortKey) -> regUnique(self(),Name,SortKey).
-regUnique(Pid,Name,SortKey) ->
-    case p6dmap:addGlobal(?P6DMAP,Pid,p6str:to_lower_bin(Name),SortKey) of
-        ok ->  ?linfo("Registered unique global: ~p (~p) with key: ~p",[Name,Pid,SortKey]),
-               ok;
-        Other -> ?linfo("Failed to register global service ~p (~p) with key: ~p -- ~p",[Name,Pid,SortKey,Other]),
-                 Other
-    end.
-
 regGlobal(Names) when is_list(Names) -> lists:foreach(fun(N)->regGlobal(N) end, Names);
-regGlobal(Name) -> regGlobal(Name,0).
-regGlobal(Name,Load) -> regGlobal(self(),Name,Load).
-regGlobal(Pid,Name,Load) ->
-    case p6dmap:addGlobal(?P6DMAP,Pid,p6str:to_lower_bin(Name),{Load,cpu_load:util()}) of
-        ok -> ?linfo("Registered global: ~p (~p)",[Name,Pid]),
+regGlobal(Name) -> regGlobal(Name,undefined).
+regGlobal(Name,Tags) -> regGlobal(self(),Name,Tags).
+regGlobal(Pid,Name,OrigTags) ->
+    Tags = case OrigTags of
+	       undefined -> undefined;
+	       T -> p6str:to_lower_list(T)
+	   end,
+    case p6dmap:addGlobal(?P6DMAP,Pid,p6str:to_lower_bin(Name),Tags) of
+        ok -> ?linfo("Registered global: ~p (~p), tags: ~p",[Name,Pid,Tags]),
               ok;
-        Other -> ?linfo("Failed to register global service ~p (~p,~p) : ~p",[Name,Pid,Load,Other]),
+        Other -> ?linfo("Failed to register global service ~p (~p,~p) : ~p",[Name,Pid,Tags,Other]),
                  Other
     end.
 
 regLocal(Names) when is_list(Names) -> lists:foreach(fun(Name) -> ok = regLocal(Name) end, Names);
 regLocal(Name) ->
-    case p6dmap:addLocal(?P6DMAP,self(),p6str:to_lower_bin(Name),local) of
+    case p6dmap:addLocal(?P6DMAP,self(),p6str:to_lower_bin(Name),undefined) of
         ok -> ?linfo("Registered local: ~p (~p)",[Name,self()]), ok;
         Other -> ?linfo("Failed to register global service ~p (~p) : ~p",[Name,self(),Other]),
                  Other
@@ -60,12 +45,6 @@ unregGlobal(Pid, Name) ->
 		 Other
     end.
 
-updateSvcLoad(Name,SvcLoad) -> updateSvcLoad(self(),Name,SvcLoad).
-updateSvcLoad(Pid,Name,SvcLoad) -> updateLoad(Pid,Name,{SvcLoad,cpu_load:util()}).
-
-updateLoad(Name,Load) -> updateLoad(self(),Name,Load).
-updateLoad(Pid,Name,Load={_,_}) -> p6dmap:set(?P6DMAP,Pid,p6str:to_lower_bin(Name),Load).
-
 getDM() -> whereis(?P6DMAP).
 
 allServiceNames() -> p6dmap:uniqueKeys(?P6DMAP).
@@ -79,7 +58,8 @@ service2Nodes() ->
     dict:to_list(lists:foldl(fun([S,N],Dict) -> dict:append(S,N,Dict) end, dict:new(), p6dmap:keyToNodes(?P6DMAP))).
 
 %% Returns list of DM,Pid,Val
-find(Name) -> p6dmap:getWithDM(?P6DMAP,p6str:to_lower_bin(Name)).
+find(Name) -> filter_tags(find_unfiltered(Name)).
+find_unfiltered(Name) -> p6dmap:getWithDM(?P6DMAP,p6str:to_lower_bin(Name)).
 
 findBalanced(Name) ->
     case find(Name) of
@@ -105,7 +85,10 @@ registerConfigured() ->
 
 
 init([]) ->
-    p6dmap:new(?P6DMAP,?MODULE),
+    mmd_node_cost:start_link(),
+    mmd_node_tags:start_link(),
+    cpu_load:start_link(),
+    p6dmap:new(?P6DMAP),
     regLocal(?MODULE),
     registerConfigured(),
     timer:send_interval(500, update_svcs),
@@ -232,62 +215,53 @@ dispatchDiff(State=#state{chans=Chans}) ->
       end, Chans),
     All.
 
--spec(calcDiff(State::#state{}) -> {All::set, Added::list(), Removed::list()}).
 calcDiff(#state{known=Known}) ->
     All = sets:from_list(services:allServiceNames()),
     {All,sets:to_list(sets:subtract(All,Known)),sets:to_list(sets:subtract(Known,All))}.
 
-
-%% Initial version duplicates logic to boot strap, avoids having a magic value to compare
-mapFree([Entry=[_,_,{DataCenter,0,HostLoad}]|Rest]) ->
-    HostFree = 100 - HostLoad,
-    mapFree(Rest,DataCenter,HostFree,[{HostFree,Entry}]);
-
-%% Don't know what we're looking at, but it isn't something
-%% we can do weighted random robin on.
-mapFree(_Entries) ->
-    fail.
-
-mapFree([],_MinDataCenter,TotalFree,Acc) ->
-    {TotalFree,Acc};
-
-%%Ignore local nodes
-%%mapFree([[_,_,{1,0,_HostLoad}]|Rest],MinDataCenter,TotalFree,Acc) ->
-%%    mapFree(Rest,MinDataCenter,TotalFree,Acc);
-
-mapFree([Entry=[_,_,{DataCenter,0,HostLoad}]|Rest],MinDataCenter,_TotalFree,_Acc) when DataCenter < MinDataCenter ->
-%%    ?linfo("Better DC: ~p < ~p : ~p",[DataCenter,MinDataCenter,Entry]),
-    HostFree = 100 - HostLoad,
-    mapFree(Rest,DataCenter,HostFree,[{HostFree,Entry}]);
-
-mapFree([Entry=[_,_,{DataCenter,0,HostLoad}]|Rest],MinDataCenter,TotalFree,Acc) when DataCenter == MinDataCenter ->
-    HostFree = 100 - HostLoad,
-    mapFree(Rest,DataCenter,TotalFree+HostFree,[{HostFree,Entry}|Acc]);
-
-mapFree([_Entry=[_,_,{DataCenter,0,_HostLoad}]|Rest],MinDataCenter,TotalFree,Acc) when DataCenter > MinDataCenter ->
-%%    ?linfo("Worse DC: ~p > ~p : ~p",[DataCenter,MinDataCenter,_Entry]),
-    mapFree(Rest,MinDataCenter,TotalFree,Acc);
-
-mapFree(_NoMatch,_MinDataCenter,_TotalFree,_Acc) ->
-    ?ldebug("Fail: ~p",[_NoMatch]),
-    fail.
-
+balance([A]) -> A;
 balance(List) ->
-    case mapFree(List) of
-        fail -> lists:sort(fun([_,_,L1],[_,_,L2]) -> L1 < L2 end, List);
-        {_Total,[{_,Entry}]} ->
-            [Entry];
-        {Total,Entries} ->
-            Rand = random_service:uniform(trunc(Total)),
-            E = walkUntil(Rand,Entries),
-%%            ?ldebug("Balance of\nFree: ~p, Rand: ~p, Selected: ~p\nEntries: ~w",[Total,Rand,E,Entries]),
-            [E]
-    end.
+    Items = filter_min_cost(List),
+    {Total,FreeItems} = map_free(Items),
+    Rand = random_service:uniform(Total),
+    [walk_until(Rand,FreeItems)].
 
-walkUntil(_Num,[{_N,Entry}]) -> Entry;  % rand is trunc'd total, so may kenobi on us, this catches that
-walkUntil(Num,[{N,Entry}|_Rest]) when N > Num -> Entry;
-walkUntil(Num,[{N,_Entry}|Rest]) -> walkUntil(Num-N,Rest).
+walk_until(_Num,[{_N,Entry}]) -> Entry;  % rand is trunc'd total, this catches us before we run short of actual load numbers
+walk_until(Num,[{N,Entry}|_Rest]) when N >= Num -> Entry;
+walk_until(Num,[{N,_Entry}|Rest]) -> walk_until(Num-N,Rest).
 
+map_free(Items) ->
+    Nodes = lists:usort([ N || [N,_,_] <- Items ]),
+    Free = [ {N,100-L} || {N,L} <- cpu_load:util(Nodes) ],
+    lists:foldl(fun(Item=[N,_,_],{Sum,Acc}) ->
+			case lists:keyfind(N,1,Free) of
+			    false -> {Sum+1,[{1,Item}|Acc]};
+			    {_,Load} -> {Sum+Load,[{Load,Item}|Acc]}
+			end
+		end,
+		{0,[]},
+		Items).
+
+filter_tags(Items) ->
+    lists:filter(fun([_,_,Tags]) -> mmd_node_tags:has(Tags) end,Items).
+
+filter_min_cost(Items=[_]) -> Items; %% single item, don't bother filtering
+filter_min_cost([First=[FirstNode,_,_]|Items]) ->
+    FirstCost = mmd_node_cost:get_cost(FirstNode),
+    {_,Filtered} = 
+	lists:foldl(
+	  fun(Item=[N,_,_],Cur={Cost,Acc}) ->
+		  case mmd_node_cost:get_cost(N) of
+		      C when C < Cost -> {C,[Item]};
+		      C when C > Cost -> Cur;
+		      _ -> {Cost,[Item|Acc]}
+		  end
+	  end,
+	  {FirstCost,[First]},
+	  Items),
+    Filtered.
+			       
+    
 
 
 %% vim: ts=4:sts=4:sw=4:et:sta:

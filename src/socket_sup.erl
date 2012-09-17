@@ -52,7 +52,7 @@ init([]) ->
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
     Listeners = case application:get_env(listeners) of
                     {ok,Listener} -> process(Listener);
-                    _ -> [?CHILD(socket_listener,worker)]
+                    _ -> []%%?CHILD(socket_listener,worker)]
                 end,
     {ok, {SupFlags, [?CHILD(socket_handlers,supervisor)|Listeners]}}.
 

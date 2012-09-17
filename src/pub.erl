@@ -22,7 +22,6 @@
 -module(pub).
 
 -export([start_link/0]).
--export([xformEntryAdd/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -40,13 +39,12 @@
 start_link() ->
     gen_server:start_link({local, pub}, ?MODULE, [], []).
 
-xformEntryAdd(E) -> E.
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 init([]) ->
-    p6dmap:new(subs, ?MODULE),
+    p6dmap:ensure(subs),
     services:regLocal(pub),
     {ok, channel_mgr:new()}.
 
