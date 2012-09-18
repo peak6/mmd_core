@@ -12,14 +12,27 @@
 
 -record(state, {known=sets:new(), chans=channel_mgr:new()}).
 
+fix_tags(undefined) -> undefined;
+fix_tags(List) -> lists:usort(p6str:to_lower_list(List)).
+
+get_tags(Tags) ->
+    Ret = case application:get_env(mmd_core,force_tags) of
+	      {ok,AppTags} -> merge_tags(AppTags,Tags);
+	      _ -> Tags
+	  end,
+    fix_tags(Ret).
+
+merge_tags(undefined,undefined) -> undefined;
+merge_tags(undefined,List) -> List;
+merge_tags(List,undefined) -> List;
+merge_tags(List1,List2) -> List1++List2.
+			   
+
 regGlobal(Names) when is_list(Names) -> lists:foreach(fun(N)->regGlobal(N) end, Names);
 regGlobal(Name) -> regGlobal(Name,undefined).
 regGlobal(Name,Tags) -> regGlobal(self(),Name,Tags).
 regGlobal(Pid,Name,OrigTags) ->
-    Tags = case OrigTags of
-	       undefined -> undefined;
-	       T -> p6str:to_lower_list(T)
-	   end,
+    Tags = get_tags(OrigTags),
     case p6dmap:addGlobal(?P6DMAP,Pid,p6str:to_lower_bin(Name),Tags) of
         ok -> ?linfo("Registered global: ~p (~p), tags: ~p",[Name,Pid,Tags]),
               ok;
@@ -243,7 +256,11 @@ map_free(Items) ->
 		Items).
 
 filter_tags(Items) ->
-    lists:filter(fun([_,_,Tags]) -> mmd_node_tags:has(Tags) end,Items).
+    MyNode = node(),
+    lists:filter(fun
+		     ([Node,_,_]) when Node =:= MyNode -> true;
+		     ([_,_,Tags]) -> mmd_node_tags:has(Tags) 
+		 end,Items).
 
 filter_min_cost(Items=[_]) -> Items; %% single item, don't bother filtering
 filter_min_cost([First=[FirstNode,_,_]|Items]) ->
@@ -261,7 +278,4 @@ filter_min_cost([First=[FirstNode,_,_]|Items]) ->
 	  Items),
     Filtered.
 			       
-    
-
-
 %% vim: ts=4:sts=4:sw=4:et:sta:

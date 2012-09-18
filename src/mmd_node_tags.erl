@@ -46,7 +46,11 @@ start_link(Tags) ->
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-init([Tags]) ->
+init([InitialTags]) ->
+    Tags = case p6props:getApp(tags) of
+	       {ok,T} -> InitialTags++T;
+	       _Other -> InitialTags
+	   end,
     {ok, to_lower_list(Tags)}.
 
 handle_call(get,_From,Tags) -> {reply,Tags,Tags};
