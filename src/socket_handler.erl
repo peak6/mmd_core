@@ -70,11 +70,9 @@ call(Pid,Term) -> gen_server:call(Pid,Term).
 %%%===================================================================
 
 init([MaxChansPerSock]) ->
-%%    process_flag(trap_exit,true),
     {ok, #state{chans = channel_mgr:new(MaxChansPerSock)}}.
 
 verifySocket(Socket) ->
-%    gen_tcp:send(Socket,?CODEC_VERSION),
     case gen_tcp:recv(Socket,0,3000) of
         {ok,?CODEC_VERSION} -> ok;
         {ok,<<?CODEC_MAJOR:8,Other:8>>} ->

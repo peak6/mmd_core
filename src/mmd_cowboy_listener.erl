@@ -37,6 +37,11 @@ start_link(Port) ->
 	       ],
     ?linfo("Starting http server on port: ~p with config: ~p",[Port,?DUMP_REC(htcfg,Cfg)]),
     cowboy:start_listener(mmd_http_listener, 5,
-			  cowboy_tcp_transport, [{port,Port},{recbuf,?megs(1)},{sndbuf,?megs(2)}],
+			  cowboy_tcp_transport, [
+						 {port,Port},
+						 {recbuf,?megs(1)},
+						 {sndbuf,?megs(2)},
+						 {ip,mmd_bind:ip()}
+						],
 			  cowboy_http_protocol, [{dispatch,Dispatch}]
 			 ).

@@ -31,15 +31,6 @@
 
 -record(state, {lsock, acceptor, max_chans_per_sock}).
 
--define(LISTEN_OPTS,
-        [{active,false},
-         {keepalive,true},
-         {packet,4},
-         {reuseaddr,true},
-         {send_timeout,30000},
-         binary
-        ]).
-
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -49,10 +40,20 @@ start_link(Port, MaxChansPerSock) ->
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-
+listen_opts() ->
+        [{active,false},
+         {keepalive,true},
+         {packet,4},
+         {reuseaddr,true},
+         {send_timeout,30000},
+         binary,
+	 {ip,mmd_bind:ip()}
+        ].
+    
 init([Port, MaxChansPerSock]) ->
-    {ok,LSock} = gen_tcp:listen(Port,?LISTEN_OPTS),
-    ?linfo("Listening on: ~s",[p6str:local_sock_to_str(LSock)]),
+    Opts = listen_opts(),
+    {ok,LSock} = gen_tcp:listen(Port,Opts),
+    ?linfo("Listening on: ~s, options: ~p",[p6str:local_sock_to_str(LSock), Opts]),
     Acceptor = proc_lib:spawn_link(
 		 fun() -> accept(self(), LSock, MaxChansPerSock) end),
     {ok,#state{lsock=LSock,

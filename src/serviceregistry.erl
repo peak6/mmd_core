@@ -38,7 +38,6 @@ do_action(Originator, Props) ->
 					     {<<"action">>,fun p6str:mkatom/1},
 					     {<<"tag">>,fun to_lower_list/1}
 					    ],Props),
-    ?ldebug("Props: ~p\nTags: ~p",[Props,Tags]),
     case validate(Names) of
 	[] -> do_action(Action,Originator,Names,Tags);
 	Other -> ?error(?INVALID_REQUEST,p6str:mkbin(Other))
@@ -49,7 +48,6 @@ to_lower_list(Item) -> to_lower_list([Item]).
 
 validate(undefined) -> {error,name_not_specified};
 validate(Names) ->
-    ?ldebug("Validating: ~p",[Names]),
     lists:foldl(fun
 		    (<<>>,Acc) -> [{error,empty_name}|Acc]; 
 		    (_,Acc) -> Acc

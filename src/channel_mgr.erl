@@ -82,13 +82,13 @@ process_down(State,{'DOWN',_Ref,process,Pid,Reason}) ->
 %% dispatch the message for us.
 process_local(State, M) -> process_local(State, M, undefined).
 process_local(State, M, Cfg) -> process_local(State, M, Cfg, undefined).
-process_local(State, M=#channel_create{id=Id}, Cfg, Data) ->
-    case ets:info(?tid(State), size) > ?max_chans(State) of
-	true -> {State, maxChans(Id, ?max_chans(State))};
+process_local(State=#state{tid=Tid,max_chans=MaxChans}, M=#channel_create{id=Id}, Cfg, Data) ->
+    case MaxChans =:= 0 orelse ets:info(Tid, size) > MaxChans of
+	true -> {State, maxChans(Id, MaxChans)};
 	false ->
 	    {ok,Pid} = client_channel:new(self(),M,Cfg),
 	    Ref = monitor(process,Pid),
-	    case ets:insert_new(?tid(State),
+	    case ets:insert_new(Tid,
 				#chan{id = Id, remote = Pid, data = Data, ref = Ref}) of
 		true -> {State, []};
 		false ->
