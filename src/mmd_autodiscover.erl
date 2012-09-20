@@ -65,7 +65,11 @@ handle_cast(Msg, State) ->
 
 handle_info({udp,Sock,FromIP,Port,Bin},State=#state{sock=Sock,port=Port,ignore=Ignore}) ->
     case parse(Bin) of
-	{ok,Ping} -> {noreply,process(Ping,State)};
+	{ok,Ping} -> 
+	    case lists:member(Ping,Ignore) of
+		true -> {noreply,State};
+		false -> {noreply,process(Ping,State)}
+	    end;
 	{error,Reason} ->
 	    IPP = {FromIP,Port},
 	    case lists:member(IPP,Ignore) of
@@ -94,7 +98,8 @@ code_change(_OldVsn, State, _Extra) ->
 send_ping(#state{sock=Sock,addr=Addr,port=Port,ping=Ping}) ->
     ok = gen_udp:send(Sock,Addr,Port,term_to_binary(Ping)).
 
-ignore(Item,State=#state{ignore=Ignore}) -> State#state{ignore=[Item|Ignore]}.
+ignore(Item,State=#state{ignore=Ignore}) -> 
+    State#state{ignore=[Item|Ignore]}.
 
 parse(Bin) ->
     case catch binary_to_term(Bin) of
