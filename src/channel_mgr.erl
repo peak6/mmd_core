@@ -83,7 +83,7 @@ process_down(State,{'DOWN',_Ref,process,Pid,Reason}) ->
 process_local(State, M) -> process_local(State, M, undefined).
 process_local(State, M, Cfg) -> process_local(State, M, Cfg, undefined).
 process_local(State=#state{tid=Tid,max_chans=MaxChans}, M=#channel_create{id=Id}, Cfg, Data) ->
-    case MaxChans =:= 0 orelse ets:info(Tid, size) > MaxChans of
+    case MaxChans =/= 0 andalso ets:info(Tid, size) > MaxChans of
 	true -> {State, maxChans(Id, MaxChans)};
 	false ->
 	    {ok,Pid} = client_channel:new(self(),M,Cfg),
