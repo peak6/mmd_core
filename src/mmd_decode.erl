@@ -23,8 +23,6 @@ decodeRawFull(Bin) when is_binary(Bin) -> decodeFull(?raw(Bin)).
 decode(?raw(Bin)) -> decode_obj(Bin);
 decode(Other) -> Other.
 
--define(TAG_WITH_SIZE(Tag,Sz,Data),<<Tag,0:4,SSz:4,Sz:SSz/signed-unit:8,Data/binary>>).
-
 decodeFull(Thing) ->
     case decode(Thing) of
         Create=#channel_create{body=Body} -> Create#channel_create{body=decodeFull(Body)};
