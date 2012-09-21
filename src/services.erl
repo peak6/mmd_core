@@ -26,7 +26,7 @@ merge_tags(undefined,undefined) -> undefined;
 merge_tags(undefined,List) -> List;
 merge_tags(List,undefined) -> List;
 merge_tags(List1,List2) -> List1++List2.
-			   
+
 
 regGlobal(Names) when is_list(Names) -> lists:foreach(fun(N)->regGlobal(N) end, Names);
 regGlobal(Name) -> regGlobal(Name,undefined).
@@ -260,13 +260,13 @@ filter_tags(Items) ->
     MyNode = node(),
     lists:filter(fun
 		     ([Node,_,_]) when Node =:= MyNode -> true;
-		     ([_,_,Tags]) -> mmd_node_tags:has(Tags) 
+		     ([_,_,Tags]) -> mmd_node_tags:has(Tags)
 		 end,Items).
 
 filter_min_cost(Items=[_]) -> Items; %% single item, don't bother filtering
 filter_min_cost([First=[FirstNode,_,_]|Items]) ->
     FirstCost = mmd_node_cost:get_cost(FirstNode),
-    {_,Filtered} = 
+    {_,Filtered} =
 	lists:foldl(
 	  fun(Item=[N,_,_],Cur={Cost,Acc}) ->
 		  case mmd_node_cost:get_cost(N) of
@@ -278,5 +278,5 @@ filter_min_cost([First=[FirstNode,_,_]|Items]) ->
 	  {FirstCost,[First]},
 	  Items),
     Filtered.
-			       
+
 %% vim: ts=4:sts=4:sw=4:et:sta:
