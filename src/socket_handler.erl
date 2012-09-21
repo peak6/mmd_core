@@ -153,7 +153,7 @@ handle_info({tcp, _, Data},
                          chans=Chans,
                          trace=Trace}) ->
     inet:setopts(Socket, [{active, once}]),
-    Msg = mmd_decode:decodeRaw(Data),
+    Msg = mmd_decode:decode_head(Data),
     case Trace of
         true -> ?linfo("Received from socket: ~w", [Msg]);
         false -> ok

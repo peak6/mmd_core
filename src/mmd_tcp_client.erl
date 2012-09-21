@@ -160,7 +160,7 @@ handle_cast(Msg, State) ->
 
 
 handle_info({tcp, Sock, Data}, State=#state{name=Name}) ->
-    case mmd_decode:decode(?raw(Data)) of
+    case mmd_decode:decode_head(?raw(Data)) of
 	M=#channel_create{service=Svc, id=Id} ->
 	    ?linfo("channel_create: service: ~p", [Svc]),
 	    case svc_pid(State, Svc) of

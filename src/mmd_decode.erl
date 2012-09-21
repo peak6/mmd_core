@@ -23,16 +23,23 @@ decodeRawFull(Bin) when is_binary(Bin) -> decodeFull(?raw(Bin)).
 decode(?raw(Bin)) -> decode_obj(Bin);
 decode(Other) -> Other.
 
-decodeFull(Thing) ->
-    case decode(Thing) of
-        Create=#channel_create{body=Body} -> Create#channel_create{body=decodeFull(Body)};
-        Msg=#channel_message{body=Body} -> Msg#channel_message{body=decodeFull(Body)};
-        Close=#channel_close{body=Body} -> Close#channel_close{body=decodeFull(Body)};
+decodeFull(<<B/binary>>) ->
+    case decode_head(B) of
+        Create=#channel_create{body=Body} ->
+            Create#channel_create{body=decode_obj(Body)};
+        Msg=#channel_message{body=Body} ->
+            Msg#channel_message{body=decode_obj(Body)};
+        Close=#channel_close{body=Body} ->
+            Close#channel_close{body=decode_obj(Body)};
         {Other,<<>>} -> Other;
         Other -> Other
-    end.
+    end;
+decodeFull(Thing) -> Thing.
 
-decode_obj(<<?CHANNEL_CREATE,Chan:16/binary,Type:1/binary,SvcSize:8/unsigned-integer,Svc:SvcSize/binary,Timeout:16/signed-integer,AT:16/binary,Body/binary>>) ->
+
+decode_head(<<?CHANNEL_CREATE, Chan:16/binary, Type:1/binary,
+              SvcSize:8/unsigned-integer, Svc:SvcSize/binary,
+              Timeout:16/signed-integer, AT:16/binary, Body/binary>>) ->
     #channel_create{service=Svc,
                     type=channel_type(Type),
                     timeout=if Timeout < 0 -> Timeout * -1; true -> Timeout*1000 end,
@@ -40,9 +47,9 @@ decode_obj(<<?CHANNEL_CREATE,Chan:16/binary,Type:1/binary,SvcSize:8/unsigned-int
                     id=binary:copy(Chan),
                     body=?raw(Body)};
 
-decode_obj(<<?VARINT_CHANNEL_CREATE,Chan:16/binary,Data/binary>>) ->
-    {[Type,Svc,Timeout,AT],Body} =
-        decode_chain(Data,[channel_type,atom,svarint64,uuid_notag]),
+decode_head(<<?VARINT_CHANNEL_CREATE, Chan:16/binary, Data/binary>>) ->
+    {[Type, Svc, Timeout, AT], Body} =
+        decode_chain(Data, [channel_type, atom, svarint64, uuid_notag]),
     #channel_create{service=Svc,
                     type=Type,
                     timeout=Timeout,
@@ -50,10 +57,10 @@ decode_obj(<<?VARINT_CHANNEL_CREATE,Chan:16/binary,Data/binary>>) ->
                     id=binary:copy(Chan),
                     body=?raw(Body)};
 
-decode_obj(<<?CHANNEL_MESSAGE,Chan:16/binary,Body/binary>>) ->
-    #channel_message{id=Chan,body=?raw(Body)};
-decode_obj(<<?CHANNEL_CLOSE,Chan:16/binary,Body/binary>>) ->
-    #channel_close{id=Chan,body=?raw(Body)};
+decode_head(<<?CHANNEL_MESSAGE, Chan:16/binary, Body/binary>>) ->
+    #channel_message{id=Chan, body=?raw(Body)};
+decode_head(<<?CHANNEL_CLOSE, Chan:16/binary, Body/binary>>) ->
+    #channel_close{id=Chan, body=?raw(Body)}.
 
 decode_obj(M=#channel_create{}) -> M;
 decode_obj(M=#channel_message{}) -> M;
