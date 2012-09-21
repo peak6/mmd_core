@@ -111,7 +111,7 @@ decode_obj(<<?DOUBLE,Data/binary>>) ->
 decode_obj(<<?FLOAT,Data/binary>>) ->
     decode_type(float,Data);
 decode_obj(<<?NULL,Data/binary>>) ->
-    {nil, Data};
+    {undefined, Data};
 decode_obj(<<?TRUE,Data/binary>>) ->
     {true, Data};
 decode_obj(<<?FALSE,Data/binary>>) ->
