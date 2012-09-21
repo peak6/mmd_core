@@ -41,6 +41,7 @@
 -define(DOWN,{'DOWN',_Ref,process,_Pid,_Reason}).
 
 -record(state, {socket,
+                vsn,
 		chans=channel_mgr:new(),
 		sockName,
 		trace=false,
@@ -74,11 +75,9 @@ init([MaxChansPerSock]) ->
 
 verifySocket(Socket) ->
     case gen_tcp:recv(Socket,0,3000) of
-        {ok,?CODEC_VERSION} -> ok;
-        {ok,<<?CODEC_MAJOR:8,Other:8>>} ->
-            ?linfo("Codec minor version mismatch, my version: ~p, their version: ~p",[?CODEC_MINOR,Other]),
-            ok;
-        {ok,Other} -> {bad_version,{expected,?CODEC_VERSION},{received,Other}};
+        {ok, <<1, 1>>} -> {ok, v1_1};
+        {ok, <<1, 0>>} -> {ok, v1_0};
+        {ok, Other} -> {unknown_codec_version, {received, Other}};
         Err -> Err
     end.
 
@@ -116,10 +115,10 @@ handle_call({getInfo,Fields},_From,State) ->
 handle_call({take,Socket}, _From, State) ->
     SName = p6str:sock_to_str(Socket),
     case verifySocket(Socket) of
-        ok ->
+        {ok, Vsn} ->
             inet:setopts(Socket,[{active,once},{nodelay, true}, {recbuf,128*1024*1024},{sndbuf,128*1024*1024}]),
             con_tracker:registerConnection(self(),socket,SName,Socket),
-            {reply,ok,State#state{socket=Socket,sockName=SName}};
+            {reply, ok, State#state{socket=Socket, sockName=SName, vsn=Vsn}};
         Other ->
             ?lerr("Failed to negotiate with client: (~s)~p -- ~p",[SName,Socket,Other]),
             {stop,normal,{error,Other},ignore}
