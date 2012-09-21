@@ -165,6 +165,7 @@ handle_call({mmd, From, CC=#channel_create{type=sub, body=SvcPattern}}, _From,
 	    State=#state{chans=Chans}) ->
     case case mmd_decode:decode(SvcPattern) of
 	     {nil, _Rst} -> re:compile("");
+	     {undefined, _Rst} -> re:compile("");
 	     {Str, _Rst} -> re:compile(Str);
 	     undefined -> re:compile("");
 	     S -> re:compile(S)
