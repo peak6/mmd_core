@@ -144,24 +144,32 @@ handle_info({tcp,_,<<?PING>>},State=#state{socket=Socket}) ->
     gen_tcp:send(Socket,<<?PONG>>),
     {noreply,State};
 
-handle_info({tcp,_,Data},State=#state{mmdCfg=MMDCfg,socket=Socket,chans=Chans,trace=Trace}) ->
-    inet:setopts(Socket,[{active,once}]),
+handle_info({tcp, _, Data},
+            State=#state{mmdCfg=MMDCfg,
+                         socket=Socket,
+                         chans=Chans,
+                         trace=Trace}) ->
+    inet:setopts(Socket, [{active, once}]),
     Msg = mmd_decode:decodeRaw(Data),
     case Trace of
-        true -> ?linfo("Received from socket: ~w",[Msg]);
+        true -> ?linfo("Received from socket: ~w", [Msg]);
         false -> ok
     end,
     case Msg of
-        #channel_create{id=Id,service=Service,body=?raw(RawMap)} when Service == '$mmd'; Service == <<"$mmd">> ->
+        #channel_create{id=Id, service=Service, body=?raw(RawMap)}
+          when Service == '$mmd'; Service == <<"$mmd">> ->
             ?map(Map) = mmd_decode:decodeRawFull(RawMap),
-            NewMMDCfg = mmd_cfg:update(MMDCfg,lists:map(fun({A,B}) -> {p6str:mkatom(A),B} end,Map)),
-            dispatch(#channel_close{id=Id,body=ok},State),
-            {noreply,State#state{mmdCfg=NewMMDCfg}};
+            NewMMDCfg = mmd_cfg:update(MMDCfg,
+                                       lists:map(fun({A, B}) ->
+                                                         {p6str:mkatom(A), B}
+                                                 end, Map)),
+            dispatch(#channel_close{id=Id, body=ok}, State),
+            {noreply, State#state{mmdCfg=NewMMDCfg}};
         _ ->
-            case channel_mgr:process_local(Chans,Msg,MMDCfg) of
-                {NewChans,Msgs} ->
-                    dispatch(Msgs,State),
-                    {noreply,State#state{chans=NewChans}}
+            case channel_mgr:process_local(Chans, Msg, MMDCfg) of
+                {NewChans, Msgs} ->
+                    dispatch(Msgs, State),
+                    {noreply, State#state{chans=NewChans}}
             end
     end;
 
