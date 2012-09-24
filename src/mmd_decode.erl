@@ -111,14 +111,10 @@ decode_obj(<<?VARINT_STRING,Data/binary>>) ->
     {Sz, PostSz} = decode_varint(Data),
     <<Str:Sz/binary, Rest/binary>> = PostSz,
     {Str,Rest};
-decode_obj(<<?SVARINT64, Data/binary>>) ->
+decode_obj(<<T, Data/binary>>) when T =:= ?SVARINT64 orelse T =:= ?SVARINT32 ->
     decode_svarint(Data);
-decode_obj(<<?VARINT64, Data/binary>>) ->
+decode_obj(<<T, Data/binary>>) when T =:= ?VARINT64 orelse T =:= ?VARINT32 ->
     decode_svarint(Data);
-decode_obj(<<?SVARINT32, Data/binary>>) ->
-    decode_svarint(Data);
-decode_obj(<<?VARINT32, Data/binary>>) ->
-    decode_varint(Data);
 decode_obj(<<?VARINT_TIME,Data/binary>>) ->
     {Ts, Rest} = decode_svarint(Data),
     {?time(Ts), Rest};
