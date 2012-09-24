@@ -20,24 +20,21 @@
 decodeRaw(Bin) when is_binary(Bin) -> decode(?raw(Bin)).
 decodeRawFull(Bin) when is_binary(Bin) -> decodeFull(?raw(Bin)).
 
-decode(?raw(Bin)) -> decode_obj(Bin);
+decode(?raw(Bin)) ->
+    {Data, <<>>} = decode_obj(Bin),
+    Data;
 decode(Other) -> Other.
 
-decodeFull(<<B/binary>>) ->
-    case decode_head(B) of
-        Create=#channel_create{body=Body} ->
-            Create#channel_create{body=decode_obj(Body)};
-        Msg=#channel_message{body=Body} ->
-            Msg#channel_message{body=decode_obj(Body)};
-        Close=#channel_close{body=Body} ->
-            Close#channel_close{body=decode_obj(Body)};
-        {Other,<<>>} -> Other;
-        Other -> Other
-    end;
-decodeFull(Thing) -> Thing.
+decodeFull(B) when is_binary(B) -> decodeFull(decode_head(?latest_vsn, B));
+decodeFull(Create=#channel_create{body=Body}) ->
+    Create#channel_create{body=decode(Body)};
+decodeFull(Msg=#channel_message{body=Body}) ->
+    Msg#channel_message{body=decode(Body)};
+decodeFull(Close=#channel_close{body=Body}) ->
+    Close#channel_close{body=decode(Body)}.
 
-
-decode_head(<<?CHANNEL_CREATE, Chan:16/binary, Type:1/binary,
+decode_head(Vsn,
+            <<?CHANNEL_CREATE, Chan:16/binary, Type:1/binary,
               SvcSize:8/unsigned-integer, Svc:SvcSize/binary,
               Timeout:16/signed-integer, AT:16/binary, Body/binary>>) ->
     #channel_create{service=Svc,
@@ -45,10 +42,10 @@ decode_head(<<?CHANNEL_CREATE, Chan:16/binary, Type:1/binary,
                     timeout=if Timeout < 0 -> Timeout * -1; true -> Timeout*1000 end,
                     auth_token=AT,
                     id=binary:copy(Chan),
-                    body=Body};
-                    %body=?raw(upgrade_body(Vsn, Body))};
+                    body=?raw(upgrade_body(Vsn, Body))};
 
-decode_head(<<?VARINT_CHANNEL_CREATE, Chan:16/binary, Type, Data/binary>>) ->
+decode_head(Vsn,
+            <<?VARINT_CHANNEL_CREATE, Chan:16/binary, Type, Data/binary>>) ->
     {Sz, Data2} = decode_varint(Data),
     <<Svc:Sz/binary, Data3/binary>> = Data2,
     {Timeout, <<AT:16/binary, Data4/binary>>} = decode_varint(Data3),
@@ -57,12 +54,12 @@ decode_head(<<?VARINT_CHANNEL_CREATE, Chan:16/binary, Type, Data/binary>>) ->
                     timeout=Timeout,
                     auth_token=AT,
                     id=binary:copy(Chan),
-                    body=?raw(Data4)};
+                    body=?raw(upgrade_body(Vsn, Data4))};
 
-decode_head(<<?CHANNEL_MESSAGE, Chan:16/binary, Body/binary>>) ->
-    #channel_message{id=Chan, body=?raw(Body)};
-decode_head(<<?CHANNEL_CLOSE, Chan:16/binary, Body/binary>>) ->
-    #channel_close{id=Chan, body=?raw(Body)}.
+decode_head(Vsn, <<?CHANNEL_MESSAGE, Chan:16/binary, Body/binary>>) ->
+    #channel_message{id=Chan, body=?raw(upgrade_body(Vsn, Body))};
+decode_head(Vsn, <<?CHANNEL_CLOSE, Chan:16/binary, Body/binary>>) ->
+    #channel_close{id=Chan, body=?raw(upgrade_body(Vsn, Body))}.
 
 decode_obj(?TAG_WITH_SIZE(?FAST_STRING,Sz,Rest)) ->
     <<Str:Sz/binary,Rest2/binary>> = Rest,
@@ -134,7 +131,7 @@ decode_obj(<<Other:1/binary,_Rest/binary>>) ->
     throw({bad_tag,Other}).
 
 decode_map(Bin,0,Acc) ->
-    {?map(lists:reverse(Acc)),Bin};
+    {?map(Acc),Bin};
 
 decode_map(Bin,Sz,Acc) ->
     {K,VBin} = decode_obj(Bin),
@@ -162,5 +159,135 @@ decode_varint(<<1:1, I:7, Rest/binary>>, Acc, Shift) ->
 
 channel_type(<<"C">>) -> call;
 channel_type(<<"S">>) -> sub.
+
+downgrade_body(Vsn, Body) ->
+    {NewBody, <<>>} = downgrade(Vsn, Body),
+    iolist_to_binary(NewBody).
+
+downgrade(v1_1, Body) ->
+    {Body, <<>>};
+downgrade(v1_0, <<?DOUBLE, Double:64/float, Rest/binary>>) ->
+    {<<?DOUBLE, Double:64/float>>, Rest};
+downgrade(v1_0, <<?FLOAT, Float:32/float, Rest/binary>>) ->
+    {<<?FLOAT, Float:32/float>>, Rest};
+downgrade(v1_0, <<?NULL, Data/binary>>) ->
+    {<<?NULL>>, Data};
+downgrade(v1_0, <<?TRUE, Data/binary>>) ->
+    {<<?TRUE>>, Data};
+downgrade(v1_0, <<?FALSE, Data/binary>>) ->
+    {<<?FALSE>>, Data};
+downgrade(v1_0, <<?UUID, UUID:16/binary, Rest/binary>>) ->
+    {<<?UUID, UUID:16/binary>>, Rest};
+downgrade(v1_0, <<?SECID, SecID:16/binary, Rest/binary>>) ->
+    {<<?SECID, SecID:16/binary>>, Rest};
+downgrade(v1_0, <<?BYTE, B, Rest/binary>>) ->
+    {<<?BYTE, B>>, Rest};
+downgrade(v1_0, ?TAG_WITH_SIZE(?FAST_STRING, Sz, Rest)) ->
+    <<Str:Sz/binary, Rest2/binary>> = Rest,
+    {[?VARINT_STRING, mmd_encode:encode_varint(Sz), Str], Rest2};
+downgrade(v1_0, <<T, Data/binary>>) when T =:= ?INT0 orelse T =:= ?UINT0 ->
+    {mmd_encode:encode_obj(v1_0, 0), Data};
+downgrade(v1_0, <<1:4, Sz:4, Int:Sz/unsigned-unit:8, Rest/binary>>) ->
+    {mmd_encode:encode_obj(v1_0, Int), Rest};
+downgrade(v1_0, <<0:4, Sz:4, Int:Sz/signed-unit:8, Rest/binary>>) ->
+    {mmd_encode:encode_obj(v1_0, Int), Rest};
+downgrade(v1_0, <<?FAST_TIME, Time:64/integer, Rest/binary>>) ->
+    {[?VARINT_TIME, mmd_encode:encode_svarint(Time)], Rest};
+downgrade(v1_0, ?TAG_WITH_SIZE(?FAST_MAP, Sz, Rest)) ->
+    {MapData, Rest2} = downgrade_map(v1_0, Rest, Sz, []),
+    {[?VARINT_MAP, mmd_encode:encode_varint(Sz), MapData], Rest2};
+downgrade(v1_0, ?TAG_WITH_SIZE(?FAST_ARRAY, Sz, Rest)) ->
+    {ArrayData, Rest2} = downgrade_array(v1_0, Rest, Sz, []),
+    {[?VARINT_ARRAY, mmd_encode:encode_varint(Sz), ArrayData], Rest2};
+downgrade(v1_0, ?TAG_WITH_SIZE(?FAST_BYTES, Sz, Rest)) ->
+    <<Bytes:Sz/binary, Rest2/binary>> = Rest,
+    {[?VARINT_BYTES, mmd_encode:encode_varint(Sz), Bytes], Rest2};
+downgrade(v1_0, <<?FAST_ERROR, Rest1/binary>>) ->
+    {Code, Rest2} = decode_obj(Rest1),
+    {Obj, Rest3} = decode_obj(Rest2),
+    {[?VARINT_ERROR, mmd_encode:encode_svarint(Code), downgrade(v1_0, Obj)],
+     Rest3}.
+
+downgrade_array(_, Bin, 0, Acc) ->
+    {iolist_to_binary(lists:reverse(Acc)), Bin};
+
+downgrade_array(Vsn, Bin, Sz, Acc) ->
+    {E, Rem} = downgrade(Vsn, Bin),
+    downgrade_array(Vsn, Rem, Sz - 1, [E | Acc]).
+
+downgrade_map(_, Bin, 0, Acc) ->
+    {iolist_to_binary(Acc), Bin};
+
+downgrade_map(Vsn, Bin, Sz, Acc) ->
+    {K, VBin} = downgrade(Vsn, Bin),
+    {V, Rem} = downgrade(Vsn, VBin),
+    downgrade_map(Vsn, Rem, Sz - 1, [K, V | Acc]).
+
+upgrade_body(Vsn, Body) ->
+    {NewBody, <<>>} = upgrade(Vsn, Body),
+    iolist_to_binary(NewBody).
+
+upgrade(v1_1, Body) ->
+    {Body, <<>>};
+upgrade(v1_0, <<?DOUBLE, Double:64/float, Rest/binary>>) ->
+    {<<?DOUBLE, Double:64/float>>, Rest};
+upgrade(v1_0, <<?FLOAT, Float:32/float, Rest/binary>>) ->
+    {<<?FLOAT, Float:32/float>>, Rest};
+upgrade(v1_0, <<?NULL, Data/binary>>) ->
+    {<<?NULL>>, Data};
+upgrade(v1_0, <<?TRUE, Data/binary>>) ->
+    {<<?TRUE>>, Data};
+upgrade(v1_0, <<?FALSE, Data/binary>>) ->
+    {<<?FALSE>>, Data};
+upgrade(v1_0, <<?UUID, UUID:16/binary, Rest/binary>>) ->
+    {<<?UUID, UUID:16/binary>>, Rest};
+upgrade(v1_0, <<?SECID, SecID:16/binary, Rest/binary>>) ->
+    {<<?SECID, SecID:16/binary>>, Rest};
+upgrade(v1_0, <<?BYTE, B, Rest/binary>>) ->
+    {<<?BYTE, B>>, Rest};
+upgrade(v1_0, <<?VARINT_STRING, Data/binary>>) ->
+    {Sz, PostSz} = decode_varint(Data),
+    <<Str:Sz/binary, Rest/binary>> = PostSz,
+    {[?FAST_STRING, mmd_encode:encode_obj(Sz), Str], Rest};
+upgrade(v1_0, <<T, Data/binary>>) when T == ?SVARINT64 orelse T == ?SVARINT32->
+    {N, Rest} = decode_svarint(Data),
+    {mmd_encode:encode_obj(N), Rest};
+upgrade(v1_0, <<T, Data/binary>>) when T == ?VARINT64 orelse T == ?VARINT32->
+    {N, Rest} = decode_varint(Data),
+    {mmd_encode:encode_obj(N), Rest};
+upgrade(v1_0, <<?VARINT_TIME,Data/binary>>) ->
+    {Ts, Rest} = decode_svarint(Data),
+    {<<?FAST_TIME, Ts:64/integer>>, Rest};
+upgrade(v1_0, <<?VARINT_MAP, Bin/binary>>) ->
+    {Sz, Data} = decode_varint(Bin),
+    {MapData, Rest} = upgrade_map(v1_0, Data, Sz, []),
+    {[?FAST_MAP, mmd_encode:encode_obj(Sz), MapData], Rest};
+upgrade(v1_0, <<?VARINT_ARRAY, Bin/binary>>) ->
+    {Sz, Rest} = decode_varint(Bin),
+    {ArrayData, Rest2} = upgrade_array(v1_0, Rest, Sz, []),
+    {[?FAST_ARRAY, mmd_encode:encode_obj(Sz), ArrayData], Rest2};
+upgrade(v1_0, <<?VARINT_BYTES, Data/binary>>) ->
+    {Sz, PostSz} = decode_varint(Data),
+    <<Bytes:Sz/binary, Rest/binary>> = PostSz,
+    {[?FAST_BYTES, mmd_encode:encode_obj(Sz), Bytes], Rest};
+upgrade(v1_0, <<?VARINT_ERROR, Bin/binary>>) ->
+    {ErrCode, PostErr} = decode_svarint(Bin),
+    {Body, Rest} = upgrade(v1_0, PostErr),
+    {[?FAST_ERROR, mmd_encode:encode_obj(ErrCode), Body], Rest}.
+
+upgrade_array(_, Bin, 0, Acc) ->
+    {iolist_to_binary(lists:reverse(Acc)), Bin};
+
+upgrade_array(Vsn, Bin, Sz, Acc) ->
+    {E, Rem} = upgrade(Vsn, Bin),
+    upgrade_array(Vsn, Rem, Sz - 1, [E | Acc]).
+
+upgrade_map(_, Bin, 0, Acc) ->
+    {iolist_to_binary(Acc), Bin};
+
+upgrade_map(Vsn, Bin, Sz, Acc) ->
+    {K, VBin} = upgrade(Vsn, Bin),
+    {V, Rem} = upgrade(Vsn, VBin),
+    upgrade_map(Vsn, Rem, Sz - 1, [K, V | Acc]).
 
 %% vim: ts=4:sts=4:sw=4:et:sta:

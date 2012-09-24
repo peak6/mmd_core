@@ -6,33 +6,47 @@
 encode_message_to_binary(Data) ->
     iolist_to_binary(encode_message(Data)).
 
-encode(Msg) -> encode_message(Msg).
+encode(Vsn, Msg) -> encode_message(Vsn, Msg).
 
-encode_message(C=#channel_create{type=call}) ->
-    encode_message(C#channel_create{type=$C});
-encode_message(#channel_create{service=Svc,type=Type,timeout=Timeout,auth_token=AT,id=Chan,body=Body}) ->
+encode_message(M) ->
+    encode_message(?latest_vsn, M).
+
+encode_message(v1_1, #channel_create{service=Svc, type=Type, timeout=Timeout,
+                                     auth_token=AT, id=Chan, body=Body}) ->
+    TypeBin = encode_channel_type(Type),
+    SvcSz = size(Svc),
+    BodyBin = encode_obj(v1_1, Body),
+    <<?CHANNEL_CREATE,
+      Chan:16/binary,
+      TypeBin,
+      SvcSz:8/unsigned-integer,
+      Svc:SvcSz/binary,
+      Timeout:16/signed-integer,
+      AT:16/binary,
+      BodyBin/binary>>;
+encode_message(v1_0, #channel_create{service=Svc, type=Type, timeout=Timeout,
+                                     auth_token=AT, id=Chan, body=Body}) ->
     [?VARINT_CHANNEL_CREATE,
      encode_uuid(Chan),
      encode_channel_type(Type),
      encode_type(string,Svc),
      encode_type(varint64,Timeout),
      encode_uuid(AT),
-     encode_obj(Body)];
-encode_message(#channel_message{id=Chan,body=Body}) ->
-     [?CHANNEL_MESSAGE,encode_uuid(Chan),encode_obj(Body)];
-encode_message(#channel_close{id=Chan,body=Body}) ->
-    [?CHANNEL_CLOSE,encode_uuid(Chan),encode_obj(Body)].
+     encode_obj(v1_0, Body)];
+encode_message(Vsn, #channel_message{id=Chan, body=Body}) ->
+    [<<?CHANNEL_MESSAGE, Chan:16/binary>>, encode_obj(Vsn, Body)];
+encode_message(Vsn, #channel_close{id=Chan, body=Body}) ->
+    [<<?CHANNEL_CLOSE, Chan:16/binary>>, encode_obj(Vsn, Body)].
 
 encode_channel_type(sub) -> $S;
-encode_channel_type(call) -> $C;
-encode_channel_type(Other) -> Other.
+encode_channel_type(call) -> $C.
+
+encode_obj(D) -> encode_obj(?latest_vsn, D).
 
 %% Tagged types
-encode_obj(?raw(Data)) -> Data;
-encode_obj(Data) -> encode_obj(v1_1, Data).
-
+encode_obj(Vsn, ?raw(Data)) -> mmd_decode:downgrade_body(Vsn, Data);
 encode_obj(v1_1, Obj) when is_binary(Obj) ->
-    [?FAST_STRING, encode_obj(size(Obj)), Obj];
+    [?FAST_STRING, encode_obj(v1_1, size(Obj)), Obj];
 encode_obj(v1_1, 0) -> ?INT0;
 encode_obj(v1_1, Obj) when is_integer(Obj) ->
     case Obj of
@@ -63,18 +77,19 @@ encode_obj(_, nil) -> [?NULL];
 encode_obj(Vsn, ?map(Data)) ->
     {Sz, Body} = encode_map(Vsn, Data),
     case Vsn of
-        v1_1 -> [?FAST_MAP, encode_obj(Sz), Body];
+        v1_1 -> [?FAST_MAP, encode_obj(v1_1, Sz), Body];
         v1_0 -> [?VARINT_MAP, encode_varint(Sz), Body]
     end;
 encode_obj(Vsn, ?array(Data)) ->
     {Sz, Body} = encode_array(Vsn, Data),
     case Vsn of
-        v1_1 -> [?FAST_ARRAY, encode_obj(Sz), Body];
+        v1_1 -> [?FAST_ARRAY, encode_obj(v1_1, Sz), Body];
         v1_0 -> [?VARINT_ARRAY, encode_type(varint32, Sz), Body]
     end;
 encode_obj(v1_1, ?error(Code, Msg)) ->
-    [?VARINT_ERROR, encode_obj(Code), encode_obj(v1_1, Msg)];
-encode_obj(v1_1, ?bytes(Data)) -> [?FAST_BYTES, encode_obj(size(Data)), Data];
+    [?FAST_ERROR, encode_obj(v1_1, Code), encode_obj(v1_1, Msg)];
+encode_obj(v1_1, ?bytes(Data)) ->
+    [?FAST_BYTES, encode_obj(v1_1, size(Data)), Data];
 encode_obj(_, ?byte(Byte)) ->
     [?BYTE, Byte];
 encode_obj(_, ?uuid(Data)) -> [?UUID, encode_type(uuid, Data)];

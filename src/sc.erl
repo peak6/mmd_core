@@ -79,6 +79,6 @@ connect(Port) ->
     {ok,Sock}.
 
 send(Socket,Msg) ->
-    gen_tcp:send(Socket,mmd_encode:encode_message(Msg)).
+    gen_tcp:send(Socket, mmd_encode:encode_message(Msg)).
 
 %% vim: ts=4:sts=4:sw=4:et:sta:
