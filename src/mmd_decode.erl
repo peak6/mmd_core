@@ -34,7 +34,7 @@ decodeFull(Close=#channel_close{body=Body}) ->
     Close#channel_close{body=decode(Body)}.
 
 decode_head(Vsn,
-            <<?CHANNEL_CREATE, Chan:16/binary, Type:1/binary,
+            <<?CHANNEL_CREATE, Chan:16/binary, Type,
               SvcSize:8/unsigned-integer, Svc:SvcSize/binary,
               Timeout:16/signed-integer, AT:16/binary, Body/binary>>) ->
     #channel_create{service=Svc,
@@ -157,8 +157,8 @@ decode_varint(<<0:1, I:7, Rest/binary>>, Acc, Shift) ->
 decode_varint(<<1:1, I:7, Rest/binary>>, Acc, Shift) ->
     decode_varint(Rest, (I bsl Shift) bor Acc, Shift + 7).
 
-channel_type(<<"C">>) -> call;
-channel_type(<<"S">>) -> sub.
+channel_type($C) -> call;
+channel_type($S) -> sub.
 
 downgrade_body(Vsn, Body) ->
     {NewBody, <<>>} = downgrade(Vsn, Body),
