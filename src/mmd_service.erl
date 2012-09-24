@@ -72,7 +72,7 @@ behaviour_info(callbacks) -> [].
 % behaviour_info(_Other) -> undefined.
 
 %%-define(DBG(Mod,Fmt,Args), ?ldebug("(~p): "++Fmt,[Mod|Args])).
--define(CREATE_CHANNEL,'$create_channel$').
+-define(CREATE_CHANNEL,'$create_channel$'). %% '
 
 start_link(Mod,From,Create) ->
     gen_server:start_link(?MODULE,[Mod,From,Create],[]).
