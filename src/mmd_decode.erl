@@ -67,9 +67,7 @@ decode_head(<<?CHANNEL_CLOSE, Chan:16/binary, Body/binary>>) ->
 decode_obj(?TAG_WITH_SIZE(?FAST_STRING,Sz,Rest)) ->
     <<Str:Sz/binary,Rest2/binary>> = Rest,
     {Str,Rest2};
-decode_obj(<<?INT0, Data/binary>>) ->
-    {0, Data};
-decode_obj(<<?UINT0, Data/binary>>) ->
+decode_obj(<<T, Data/binary>>) when T =:= ?INT0 orelse T =:= ?UINT0 ->
     {0, Data};
 decode_obj(<<1:4,Sz:4,Int:Sz/unsigned-unit:8,Rest/binary>>) ->
     {Int,Rest};
