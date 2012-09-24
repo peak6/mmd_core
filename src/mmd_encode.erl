@@ -29,8 +29,9 @@ encode_message(v1_0, #channel_create{service=Svc, type=Type, timeout=Timeout,
     [?VARINT_CHANNEL_CREATE,
      encode_uuid(Chan),
      encode_channel_type(Type),
-     encode_type(string,Svc),
-     encode_type(varint64,Timeout),
+     encode_varint(size(Svc)),
+     Svc,
+     encode_varint(Timeout),
      encode_uuid(AT),
      encode_obj(v1_0, Body)];
 encode_message(Vsn, #channel_message{id=Chan, body=Body}) ->
@@ -46,45 +47,51 @@ encode_obj(D) -> encode_obj(?latest_vsn, D).
 %% Tagged types
 encode_obj(Vsn, ?raw(Data)) -> mmd_decode:downgrade_body(Vsn, Data);
 encode_obj(v1_1, Obj) when is_binary(Obj) ->
-    [?FAST_STRING, encode_obj(v1_1, size(Obj)), Obj];
-encode_obj(v1_1, 0) -> ?INT0;
+    Sz = size(Obj),
+    SSz = ssz(Sz),
+    <<?FAST_STRING, 1:4, SSz:4, Sz:SSz/unsigned-unit:8, Obj/binary>>;
+encode_obj(v1_1, 0) -> <<?INT0>>;
 encode_obj(v1_1, Obj) when is_integer(Obj) ->
     case Obj of
-        O when O >= -128 andalso O < 128 -> [?INT1, <<O:8/signed>>];
-        O when O > 0 andalso O < 256 -> [?UINT1, <<O:8>>];
-        O when O >= -32768 andalso O < 32768 -> [?INT2, <<O:16/signed>>];
-        O when O > 0 andalso O < 65536 -> [?UINT2, <<O:16>>];
+        O when O >= -128 andalso O < 128 -> <<?INT1, O:8/signed>>;
+        O when O > 0 andalso O < 256 -> <<?UINT1, O:8>>;
+        O when O >= -32768 andalso O < 32768 -> <<?INT2, O:16/signed>>;
+        O when O > 0 andalso O < 65536 -> <<?UINT2, O:16>>;
         O when O >= -2147483648 andalso O < 2147483648 ->
-            [?INT4, <<O:32/signed>>];
-        O when O > 0 andalso O < 4294967296 -> [?UINT4, <<O:32>>];
+            <<?INT4, O:32/signed>>;
+        O when O > 0 andalso O < 4294967296 -> <<?UINT4, O:32>>;
         O when O >= -9223372036854775808 andalso
                O < 9223372036854775808 ->
-            [?INT8, <<O:64/signed>>];
-        O when O > 0 andalso O < 18446744073709551616 -> [?UINT8, <<O:64>>];
+            <<?INT8, O:64/signed>>;
+        O when O > 0 andalso O < 18446744073709551616 -> <<?UINT8, O:64>>;
         O -> ?lerr("Int too big to mmd encode: ~p", [O]), O
     end;
 encode_obj(_, Obj) when is_float(Obj) ->
-    [?DOUBLE, encode_type(double, Obj)];
+    <<?DOUBLE, Obj:64/float>>;
 encode_obj(Vsn, Obj) when is_atom(Obj) ->
     encode_obj(Vsn, atom_to_binary(Obj, utf8));
 
-encode_obj(_, true) -> [?TRUE];
-encode_obj(_, false) -> [?FALSE];
-encode_obj(_, undefined) -> [?NULL];
-encode_obj(_, null) -> [?NULL];
-encode_obj(_, nil) -> [?NULL];
+encode_obj(_, true) -> <<?TRUE>>;
+encode_obj(_, false) -> <<?FALSE>>;
+encode_obj(_, undefined) -> <<?NULL>>;
+encode_obj(_, null) -> <<?NULL>>;
+encode_obj(_, nil) -> <<?NULL>>;
 
 encode_obj(Vsn, ?map(Data)) ->
     {Sz, Body} = encode_map(Vsn, Data),
     case Vsn of
-        v1_1 -> [?FAST_MAP, encode_obj(v1_1, Sz), Body];
+        v1_1 ->
+            SSz = ssz(Sz),
+            [<<?FAST_MAP, 1:4, SSz:4, Sz:SSz/unsigned-unit:8>>, Body];
         v1_0 -> [?VARINT_MAP, encode_varint(Sz), Body]
     end;
 encode_obj(Vsn, ?array(Data)) ->
     {Sz, Body} = encode_array(Vsn, Data),
     case Vsn of
-        v1_1 -> [?FAST_ARRAY, encode_obj(v1_1, Sz), Body];
-        v1_0 -> [?VARINT_ARRAY, encode_type(varint32, Sz), Body]
+        v1_1 ->
+            SSz = ssz(Sz),
+            [<<?FAST_ARRAY, 1:4, SSz:4, Sz:SSz/unsigned-unit:8>>, Body];
+        v1_0 -> [?VARINT_ARRAY, encode_varint(Sz), Body]
     end;
 encode_obj(v1_1, ?error(Code, Msg)) ->
     [?FAST_ERROR, encode_obj(v1_1, Code), encode_obj(v1_1, Msg)];
@@ -92,9 +99,9 @@ encode_obj(v1_1, ?bytes(Data)) ->
     [?FAST_BYTES, encode_obj(v1_1, size(Data)), Data];
 encode_obj(_, ?byte(Byte)) ->
     [?BYTE, Byte];
-encode_obj(_, ?uuid(Data)) -> [?UUID, encode_type(uuid, Data)];
-encode_obj(_, ?secid(Data)) -> [?SECID, encode_type(secid, Data)];
-encode_obj(v1_1,  ?time(Data)) -> [?FAST_TIME, <<Data:64>>];
+encode_obj(_, ?uuid(Data)) -> [?UUID, encode_uuid(Data)];
+encode_obj(_, ?secid(Data)) -> <<?SECID, Data>>;
+encode_obj(v1_1,  ?time(Data)) -> <<?FAST_TIME, Data:64>>;
 encode_obj(Vsn, Obj) when is_list(Obj) -> encode_obj(Vsn, ?array(Obj));
 encode_obj(Vsn, Obj) when is_tuple(Obj) ->
     encode_obj(Vsn, ?array(tuple_to_list(Obj)));
@@ -103,50 +110,22 @@ encode_obj(v1_0, Obj) when is_binary(Obj) ->
     [?VARINT_STRING, encode_varint(size(Obj)), Obj];
 
 encode_obj(v1_0, ?error(Code, Msg)) ->
-    [?VARINT_ERROR, encode_type(svarint32, Code), encode_obj(v1_0, Msg)];
+    [?VARINT_ERROR, encode_svarint(Code), encode_obj(v1_0, Msg)];
 encode_obj(v1_0, ?bytes(Data)) -> [?VARINT_BYTES, encode_varint(Data), Data];
 encode_obj(v1_0,  ?time(Data)) -> [?VARINT_TIME, encode_svarint(Data)];
 encode_obj(v1_0, Obj) when is_integer(Obj), Obj < 0 ->
-    [?SVARINT64, encode_type(svarint64, Obj)];
+    [?SVARINT64, encode_varint(Obj)];
 encode_obj(v1_0, Obj) when is_integer(Obj) ->
-    [?VARINT64, encode_type(varint64, Obj)].
+    [?VARINT64, encode_varint(Obj)].
 
-
-%% Encodes a given value as the specified type
-%% Note: This does NOT prefix with a type specifier, it's up to the caller
-%%       to do that.
-%% It is assumed that you are passing the right params here, there are no
-%% validity checks
-encode_type(varint64,Long) ->
-    encode_varint(Long);
-encode_type(svarint64,Long) ->
-    encode_svarint(Long);
-encode_type(varint32,Int) ->
-    encode_varint(Int);
-encode_type(svarint32,Int) ->
-    encode_svarint(Int);
-encode_type(float,Float) ->
-    <<Float:32/float>>;
-encode_type(double,Double) ->
-    <<Double:64/float>>;
-encode_type(date,D) ->
-    encode_svarint(D);
-encode_type(byte,B) ->
-    B;
-encode_type(uuid, <<UUID:16/binary>>) ->
-    UUID;
-encode_type(uuid, <<UUID:36/binary>>) ->
-    p6uuid:parse(UUID);
-encode_type(secid,SecID) when is_binary(SecID) ->
-    SecID;
-encode_type(string,String) when is_tuple(String) ->
-    encode_type(string,p6str:mkstr("~p",String));
-encode_type(string,String) when is_list(String) ->
-    encode_type(string,list_to_binary(String));
-encode_type(string,String) when is_atom(String) ->
-    encode_type(string,atom_to_binary(String,utf8));
-encode_type(string,String) when is_binary(String)->
-    [encode_varint(size(String)),String].
+ssz(Sz) ->
+    case Sz of
+        _ when Sz < 1 -> 0;
+        _ when Sz < 256 -> 1;
+        _ when Sz < 65536 -> 2;
+        _ when Sz < 4294967296 -> 4;
+        _ when Sz < 18446744073709551616 -> 8
+    end.
 
 encode_array(Vsn, Data) ->
     encode_array(Vsn, Data, 0, []).
