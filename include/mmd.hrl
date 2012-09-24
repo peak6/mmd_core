@@ -1,8 +1,7 @@
 -include_lib("p6core/include/p6core.hrl").
 %% Current (internal) codec
--define(CODEC_MAJOR,1).
--define(CODEC_MINOR,0).
--define(CODEC_VERSION,<<?CODEC_MAJOR:8,?CODEC_MINOR:8>>).
+-define(latest_vsn, v1_1).
+-define(latest_vsn_bin, <<1, 1>>).
 
 -define(MAX_CONCURRENT_CHANNELS,0). % 0 mean unlimited
 -define(CHANNEL_DISPATCH_TIMEOUT,300000). %% 5 minutes

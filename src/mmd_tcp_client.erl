@@ -43,7 +43,7 @@ init({Name, Host, Port}) ->
 	   [Name, Host, Port]),
     {ok, Sock} = gen_tcp:connect(Host, Port,
 				 [{packet,4}, binary, {keepalive, true}]),
-    ok = gen_tcp:send(Sock, mmd_codec:vsn()),
+    ok = gen_tcp:send(Sock, ?latest_vsn_bin),
     {ok, #state{sock=Sock, chans=dict:new(), svcs=dict:new(), name=Name}}.
 
 send(Pid, M) ->
