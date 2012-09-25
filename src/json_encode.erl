@@ -49,9 +49,9 @@ encode_obj(?map(undefined)) -> {obj,[]};
 encode_obj(?map(Map)) -> {obj,lists:map(fun({K,V}) -> {p6str:mkbin(K),encode_obj(V)} end,Map)};
 encode_obj(?array(undefined)) -> [];
 encode_obj(?array(Arr)) -> lists:map(fun(V) -> encode_obj(V) end, Arr);
-encode_obj(?raw(Data)) -> encode_obj(mmd_decode:decodeRawFull(Data));
+encode_obj(Data = ?raw(_)) -> encode_obj(mmd_decode:decode(Data));
 encode_obj(?secid(Id)) -> security_id:get_key(Id);
-encode_obj(?bytes(Bin)) -> encode_obj(mmd_decode:decodeFull(Bin));
+encode_obj(?bytes(Bin)) -> encode_obj(mmd_decode:decode(?raw(Bin)));
 encode_obj(T) when is_tuple(T) -> encode_obj(tuple_to_list(T));
 encode_obj(List) when is_list(List) -> lists:map(fun(X) -> encode_obj(X) end, List);
 encode_obj(Val) -> Val.
