@@ -23,12 +23,9 @@ encode(Data) ->
     Obj = encode_obj(Data),
     {ok,json:encode(Obj)}.
 
-
-
 uuidToStr(?uuid(UUID)) -> uuidToStr(UUID);
 uuidToStr(?secid(SECID)) -> uuidToStr(SECID);
 uuidToStr(Bin) -> list_to_binary(uuid:to_string(Bin)).
-
 
 encode_obj(undefined) -> null;
 encode_obj(nil) -> null;
