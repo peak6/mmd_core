@@ -160,10 +160,10 @@ initChannel(Create=#create{owner=Owner,msg=CC=#channel_create{id=Id,service=Svc}
     Service = p6str:to_lower_bin(Svc),
     CCProper = CC#channel_create{service=Service},
     case fire(Pid,CCProper) of
-        {ok,Pid} ->
-	    monitor(process,Pid),
+        {ok,NewPid} when is_pid(NewPid) ->
+	    monitor(process,NewPid),
             create_tracker:incr(Service),
-            {noreply,#state{owner=Owner,remote=Pid,id=Id,type=client,svc=Service}};
+            {noreply,#state{owner=Owner,remote=NewPid,id=Id,type=client,svc=Service}};
         Other -> ?lwarn("Failed to setup directed channel to: ~p, reason: ~p",[Pid,Other]),
                  nextTimeout(Create#create{msg=CCProper})
     end;
