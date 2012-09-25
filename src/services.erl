@@ -60,7 +60,18 @@ unregGlobal(Pid, Name) ->
 
 getDM() -> whereis(?P6DMAP).
 
-allServiceNames() -> p6dmap:uniqueKeys(?P6DMAP).
+allServiceNamesUnfiltered() -> p6dmap:uniqueKeys(?P6DMAP).
+allServiceNames() ->
+    lists:usort(
+      lists:foldl(
+	fun([_Node,Key,Val,_Owner],Keys) ->
+		case mmd_node_tags:has(Val) of
+		    true -> [Key|Keys];
+		    false -> Keys
+		end
+	end, 
+	[], 
+	p6dmap:all(?P6DMAP))).
 
 ourServices() ->
     p6dmap:getOurEntries(?P6DMAP).

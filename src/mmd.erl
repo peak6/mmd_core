@@ -48,8 +48,4 @@ join(Node) when Node == node() ->
     ok;
 join(Node) -> net_kernel:connect(Node).
 
-leave(Node) ->
-    p6auto_cluster:delNode(Node).
-
-
 %% vim: ts=4:sts=4:sw=4:et:sta:
