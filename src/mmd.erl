@@ -48,4 +48,7 @@ join(Node) when Node == node() ->
     ok;
 join(Node) -> net_kernel:connect(Node).
 
+get_dc() -> get_dc(node()).
+get_dc(Node) -> re:replace(p6str:to_lower_bin(Node),<<"^(.*@)?...(....).*$">>,<<"\\2">>,[{return,binary}]).
+
 %% vim: ts=4:sts=4:sw=4:et:sta:

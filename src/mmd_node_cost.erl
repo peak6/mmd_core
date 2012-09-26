@@ -141,8 +141,6 @@ cast(Args) -> gen_server:cast(?SERVER,Args).
 my_node() -> #node{node=node(),dc=node,cost=0,override=false}.
 my_dc() -> #dc{dc=calc_dc(node()),cost=1}.
 
-calc_dc(Node) ->
-    re:replace(p6str:to_lower_bin(Node),<<"^.*@...(....).*$">>,<<"\\1">>,[{return,binary}]).
-
+calc_dc(Node) -> mmd:get_dc(Node).
 
 %% vim: ts=4:sts=4:sw=4:et:sta:
