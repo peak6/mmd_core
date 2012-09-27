@@ -59,7 +59,7 @@ websocket_init(_Any, OReq, #htcfg{trace=Trace}) ->
 	       end,
     {ok,_Transport,Socket} = ?get(transport,Req), %% Not sure if this is a stable api
     {Peer,_} = ?get(peer,Req),
-    con_tracker:registerConnection(self(),websocket,format_addr(Peer),Socket),
+    con_tracker:registerConnection(self(),websocket,format_addr(Peer),Socket,<<"websocket">>, json),
     Req2 = cowboy_http_req:compact(Req),
     {ok, Req2, #state{xhr=XHR,type=RespType,trace=Trace,xhr_cache=XHRCache}, hibernate}.
 

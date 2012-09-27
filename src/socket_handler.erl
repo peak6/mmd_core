@@ -75,8 +75,10 @@ init([MaxChansPerSock]) ->
 
 verifySocket(Socket) ->
     case gen_tcp:recv(Socket,0,3000) of
-        {ok, <<1, 1>>} -> {ok, v1_1};
-        {ok, <<1, 0>>} -> {ok, v1_0};
+        {ok, <<1, 1, Impl/binary>>} -> {ok, v1_1, Impl};
+        {ok, <<1, 0>>} ->
+            ?lwarn("Client connected as mmd 1.0"),
+            {ok, v1_0, undefined};
         {ok, Other} -> {unknown_codec_version, {received, Other}};
         Err -> Err
     end.
@@ -115,9 +117,10 @@ handle_call({getInfo,Fields},_From,State) ->
 handle_call({take,Socket}, _From, State) ->
     SName = p6str:sock_to_str(Socket),
     case verifySocket(Socket) of
-        {ok, Vsn} ->
+        {ok, Vsn, Impl} ->
             inet:setopts(Socket,[{active,once},{nodelay, true}, {recbuf,128*1024*1024},{sndbuf,128*1024*1024}]),
-            con_tracker:registerConnection(self(),socket,SName,Socket),
+            con_tracker:registerConnection(self(),socket,
+                                           SName, Socket, Impl, Vsn),
             {reply, ok, State#state{socket=Socket, sockName=SName, vsn=Vsn}};
         Other ->
             ?lerr("Failed to negotiate with client: (~s)~p -- ~p",[SName,Socket,Other]),

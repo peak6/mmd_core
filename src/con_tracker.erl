@@ -25,7 +25,7 @@
 
 %% API
 -export([start_link/0]).
--export([registerConnection/2,registerConnection/3,registerConnection/4]).
+-export([registerConnection/6]).
 -export([getConnections/0]).
 -export([clearConnections/0]).
 
@@ -39,7 +39,7 @@
 -define(SERVER, ?MODULE).
 
 -define(TABLE,mmd_cons).
--record(con_info,{type,name,pid,port,start=os:timestamp(),ref}).
+-record(con_info,{type,name,pid,port,start=os:timestamp(),ref,impl,vsn}).
 
 %%%===================================================================
 %%% API
@@ -48,9 +48,8 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-registerConnection(Pid,Type) -> registerConnection(Pid,Type,undefined).
-registerConnection(Pid,Type,Name) -> registerConnection(Pid,Type,Name,undefined).
-registerConnection(Pid,Type,Name,Port) -> call({register,Pid,Type,Name,Port}).
+registerConnection(Pid,Type,Name,Port,Impl,Vsn) ->
+    call({register,Pid,Type,Name,Port,Impl,Vsn}).
 
 getConnections() -> ets:tab2list(?TABLE).
 
@@ -69,10 +68,11 @@ handle_call(clearAll,_From,State) ->
     ets:delete_all_objects(?TABLE),
     {reply,ok,State};
 
-handle_call({register,Pid,Type,Name,Port},_From,State) ->
-    ?linfo("Connected ~p: ~s (~p/~p)",[Type,Name,Pid,Port]),
+handle_call({register,Pid,Type,Name,Port,Impl,Vsn},_From,State) ->
+    ?linfo("Connected ~p: ~s (~p/~p, \"~s\", ~s)",
+           [Type,Name,Pid,Port,Impl,Vsn]),
     Ref = erlang:monitor(process,Pid),
-    {reply,ets:insert_new(?TABLE,#con_info{ref=Ref,name=Name,pid=Pid,type=Type,port=Port}),State};
+    {reply,ets:insert_new(?TABLE,#con_info{ref=Ref,name=Name,pid=Pid,type=Type,port=Port,impl=Impl,vsn=Vsn}),State};
 
 handle_call(Request, From, State) ->
     ?lwarn("Unexpected handle_call(~p, ~p, ~p)",[Request,From,State]),
@@ -85,7 +85,7 @@ handle_cast(Msg, State) ->
 handle_info(Down={'DOWN',Ref,process,Pid,Reason},State) ->
     case ets:lookup(?TABLE,Ref) of
         [] -> ?linfo("Received unexpected DOWN message: ~p",[Down]);
-        [#con_info{port=Port,name=Name,type=Type,start=Start}] -> ?linfo("Closed ~p: ~s (~p/~p), uptime: ~w, reason: ~p",[Type,Name,Pid,Port,uptime(Start),Reason]);
+        [#con_info{port=Port,impl=Impl,vsn=Vsn,name=Name,type=Type,start=Start}] -> ?linfo("Closed ~p: ~s (~p/~p, \"~s\", ~s), uptime: ~w, reason: ~p",[Type,Name,Pid,Port,Impl,Vsn,uptime(Start),Reason]);
         Other -> ?linfo("Unexpected response from ets lookup of ref: ~p, response was: ~p",[Ref,Other])
     end,
     ets:delete(?TABLE,Ref),
