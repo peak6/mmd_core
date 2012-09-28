@@ -80,23 +80,22 @@ encode_obj(_, nil) -> <<?NULL>>;
 encode_obj(Vsn, ?map(Data)) ->
     {Sz, Body} = encode_map(Vsn, Data),
     case Vsn of
-        v1_1 ->
-            SSz = ssz(Sz),
-            [<<?FAST_MAP, 1:4, SSz:4, Sz:SSz/unsigned-unit:8>>, Body];
+        v1_1 -> mk_tag_with_size(?FAST_MAP, Sz, Body);
         v1_0 -> [?VARINT_MAP, encode_varint(Sz), Body]
     end;
 encode_obj(Vsn, ?array(Data)) ->
     {Sz, Body} = encode_array(Vsn, Data),
     case Vsn of
-        v1_1 ->
-            SSz = ssz(Sz),
-            [<<?FAST_ARRAY, 1:4, SSz:4, Sz:SSz/unsigned-unit:8>>, Body];
+        v1_1 -> mk_tag_with_size(?FAST_ARRAY, Sz, Body);
         v1_0 -> [?VARINT_ARRAY, encode_varint(Sz), Body]
     end;
 encode_obj(v1_1, ?error(Code, Msg)) ->
-    [?FAST_ERROR, encode_obj(v1_1, Code), encode_obj(v1_1, Msg)];
+    mk_tag_with_size(?FAST_ERROR,
+                     Code,
+                     iolist_to_binary(encode_obj(v1_1, Msg)));
 encode_obj(v1_1, ?bytes(Data)) ->
-    [?FAST_BYTES, encode_obj(v1_1, size(Data)), Data];
+    Data2 = iolist_to_binary(Data),
+    mk_tag_with_size(?FAST_BYTES, size(Data2), Data2);
 encode_obj(_, ?byte(Byte)) ->
     [?BYTE, Byte];
 encode_obj(_, ?uuid(Data)) -> [?UUID, encode_uuid(Data)];
@@ -117,6 +116,10 @@ encode_obj(v1_0, Obj) when is_integer(Obj), Obj < 0 ->
     [?SVARINT64, encode_varint(Obj)];
 encode_obj(v1_0, Obj) when is_integer(Obj) ->
     [?VARINT64, encode_varint(Obj)].
+
+mk_tag_with_size(Tag, Sz, Body) ->
+    SSz = ssz(Sz),
+    [<<Tag, 1:4, SSz:4, Sz:SSz/unsigned-unit:8>>, Body].
 
 ssz(Sz) ->
     case Sz of

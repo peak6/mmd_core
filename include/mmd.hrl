@@ -7,9 +7,6 @@
 -define(CHANNEL_DISPATCH_TIMEOUT,300000). %% 5 minutes
 -define(NO_AUTH,<<0:128>>).
 
--define(TAG_WITH_SIZE(Tag, Sz, Data),
-        <<Tag, 0:4, SSz:4, Sz:SSz/signed-unit:8, Data/binary>>).
-
 -type uuid() :: binary().
 -type authToken() :: uuid().
 -type channelId() :: uuid().
