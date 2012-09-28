@@ -160,9 +160,9 @@ handle_info({tcp, _, Data},
         false -> ok
     end,
     case Msg of
-        #channel_create{id=Id, service=Service, body=?raw(RawMap)}
+        #channel_create{id=Id, service=Service, body=Body}
           when Service == '$mmd'; Service == <<"$mmd">> ->
-            ?map(Map) = mmd_decode:decodeRawFull(RawMap),
+            ?map(Map) = mmd_decode:decode(Body),
             NewMMDCfg = mmd_cfg:update(MMDCfg,
                                        lists:map(fun({A, B}) ->
                                                          {p6str:mkatom(A), B}

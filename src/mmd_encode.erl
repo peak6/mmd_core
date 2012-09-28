@@ -14,22 +14,22 @@ encode_message(M) ->
 encode_message(v1_1, #channel_create{service=Svc, type=Type, timeout=Timeout,
                                      auth_token=AT, id=Chan, body=Body}) ->
     TypeBin = encode_channel_type(Type),
-    SvcSz = size(Svc),
+    SvcSz = iolist_size(Svc),
     BodyBin = encode_obj(v1_1, Body),
-    <<?CHANNEL_CREATE,
-      Chan:16/binary,
-      TypeBin,
-      SvcSz:8/unsigned-integer,
-      Svc:SvcSz/binary,
-      Timeout:16/signed-integer,
-      AT:16/binary,
-      BodyBin/binary>>;
+    [<<?CHANNEL_CREATE,
+       Chan:16/binary,
+       TypeBin,
+       SvcSz:8/unsigned-integer,
+       Svc:SvcSz/binary,
+       Timeout:16/signed-integer,
+       AT:16/binary>>,
+     BodyBin];
 encode_message(v1_0, #channel_create{service=Svc, type=Type, timeout=Timeout,
                                      auth_token=AT, id=Chan, body=Body}) ->
     [?VARINT_CHANNEL_CREATE,
      encode_uuid(Chan),
      encode_channel_type(Type),
-     encode_varint(size(Svc)),
+     encode_varint(iolist_size(Svc)),
      Svc,
      encode_varint(Timeout),
      encode_uuid(AT),
@@ -42,28 +42,28 @@ encode_message(Vsn, #channel_close{id=Chan, body=Body}) ->
 encode_channel_type(sub) -> $S;
 encode_channel_type(call) -> $C.
 
-encode_obj(D) -> encode_obj(?latest_vsn, D).
+encode_obj(D) ->
+    iolist_to_binary(encode_obj(?latest_vsn, D)).
 
 %% Tagged types
 encode_obj(Vsn, ?raw(Data)) -> mmd_decode:downgrade_body(Vsn, Data);
 encode_obj(v1_1, Obj) when is_binary(Obj) ->
-    Sz = size(Obj),
-    SSz = ssz(Sz),
-    <<?FAST_STRING, 1:4, SSz:4, Sz:SSz/unsigned-unit:8, Obj/binary>>;
-encode_obj(v1_1, 0) -> <<?INT0>>;
+    Sz = iolist_size(Obj),
+    mk_tag_with_size(?FAST_STRING, Sz, Obj);
+encode_obj(v1_1, 0) -> <<?UINT0>>;
 encode_obj(v1_1, Obj) when is_integer(Obj) ->
     case Obj of
-        O when O >= -128 andalso O < 128 -> <<?INT1, O:8/signed>>;
         O when O > 0 andalso O < 256 -> <<?UINT1, O:8>>;
-        O when O >= -32768 andalso O < 32768 -> <<?INT2, O:16/signed>>;
+        O when O >= -128 andalso O < 128 -> <<?INT1, O:8/signed>>;
         O when O > 0 andalso O < 65536 -> <<?UINT2, O:16>>;
+        O when O >= -32768 andalso O < 32768 -> <<?INT2, O:16/signed>>;
+        O when O > 0 andalso O < 4294967296 -> <<?UINT4, O:32>>;
         O when O >= -2147483648 andalso O < 2147483648 ->
             <<?INT4, O:32/signed>>;
-        O when O > 0 andalso O < 4294967296 -> <<?UINT4, O:32>>;
+        O when O > 0 andalso O < 18446744073709551616 -> <<?UINT8, O:64>>;
         O when O >= -9223372036854775808 andalso
                O < 9223372036854775808 ->
             <<?INT8, O:64/signed>>;
-        O when O > 0 andalso O < 18446744073709551616 -> <<?UINT8, O:64>>;
         O -> ?lerr("Int too big to mmd encode: ~p", [O]), O
     end;
 encode_obj(_, Obj) when is_float(Obj) ->

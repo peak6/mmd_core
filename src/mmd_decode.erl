@@ -113,7 +113,7 @@ decode_obj(<<?VARINT_STRING,Data/binary>>) ->
 decode_obj(<<T, Data/binary>>) when T =:= ?SVARINT64 orelse T =:= ?SVARINT32 ->
     decode_svarint(Data);
 decode_obj(<<T, Data/binary>>) when T =:= ?VARINT64 orelse T =:= ?VARINT32 ->
-    decode_svarint(Data);
+    decode_varint(Data);
 decode_obj(<<?VARINT_TIME,Data/binary>>) ->
     {Ts, Rest} = decode_svarint(Data),
     {?time(Ts), Rest};
