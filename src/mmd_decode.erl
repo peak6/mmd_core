@@ -212,9 +212,41 @@ downgrade(v1_0, <<?FAST_BYTES, Rest/binary>>) ->
     {[?VARINT_BYTES, mmd_encode:encode_varint(Sz), Bytes], Rest3};
 downgrade(v1_0, <<?FAST_ERROR, Rest1/binary>>) ->
     {Code, Rest2} = decode_obj(Rest1),
-    {Obj, Rest3} = decode_obj(Rest2),
-    {[?VARINT_ERROR, mmd_encode:encode_svarint(Code), downgrade(v1_0, Obj)],
-     Rest3}.
+    {Body, Rest3} = downgrade(v1_0, Rest2),
+    {[?VARINT_ERROR, mmd_encode:encode_svarint(Code), Body], Rest3};
+
+%% TODO: v1_0 => v1_0 code can go away once all mmds get upgraded
+downgrade(v1_0, <<?VARINT_ARRAY, Rest1/binary>>) ->
+    {Sz, Rest2} = decode_varint(Rest1),
+    {MapData, Rest3} = downgrade_array(v1_0, Rest2, Sz, []),
+    {[?VARINT_MAP, mmd_encode:encode_varint(Sz), MapData], Rest3};
+downgrade(v1_0, <<?VARINT_MAP, Rest1/binary>>) ->
+    {Sz, Rest2} = decode_varint(Rest1),
+    {MapData, Rest3} = downgrade_map(v1_0, Rest2, Sz, []),
+    {[?VARINT_MAP, mmd_encode:encode_varint(Sz), MapData], Rest3};
+downgrade(v1_0, <<?VARINT_TIME,Data/binary>>) ->
+    {Ts, Rest} = decode_svarint(Data),
+    {[?VARINT_TIME, mmd_encode:encode_svarint(Ts)], Rest};
+downgrade(v1_0, <<?VARINT_BYTES, Data/binary>>) ->
+    {Sz, PostSz} = decode_varint(Data),
+    <<Bytes:Sz/binary, Rest/binary>> = PostSz,
+    {[?VARINT_BYTES, mmd_encode:encode_svarint(Sz), Bytes], Rest};
+downgrade(v1_0, <<?VARINT_ERROR, Bin/binary>>) ->
+    {ErrCode, PostErr} = decode_svarint(Bin),
+    {Body, Rest} = downgrade(v1_0, PostErr),
+    {[?VARINT_ERROR, mmd_encode:encode_svarint(ErrCode), Body], Rest};
+downgrade(v1_0, <<?VARINT_STRING,Data/binary>>) ->
+    {Sz, PostSz} = decode_varint(Data),
+    <<Str:Sz/binary, Rest/binary>> = PostSz,
+    {[?VARINT_STRING, mmd_encode:encode_varint(Sz), Str], Rest};
+downgrade(v1_0, <<T, Data/binary>>)
+  when T =:= ?SVARINT64 orelse T =:= ?SVARINT32 ->
+    {I, Rest} = decode_svarint(Data),
+    {mmd_encode:encode_obj(v1_0, I), Rest};
+downgrade(v1_0, <<T, Data/binary>>)
+  when T =:= ?VARINT64 orelse T =:= ?VARINT32 ->
+    {I, Rest} = decode_varint(Data),
+    {mmd_encode:encode_obj(v1_0, I), Rest}.
 
 downgrade_array(_, Bin, 0, Acc) ->
     {iolist_to_binary(lists:reverse(Acc)), Bin};
