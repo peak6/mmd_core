@@ -37,9 +37,13 @@ json_head(Type, Id) ->
     ChanIdBin = list_to_binary(uuid:to_string(Id)),
     <<"{\"", TypeBin/binary, "\":\"", ChanIdBin/binary, "\",">>.
 
+
 json_body(?raw(Body)) ->
     {JsonBody, <<>>} = mmd_to_json(Body),
-    [<<"\"body\":">>, JsonBody, $}].
+    [<<"\"body\":">>, JsonBody, $}];
+json_body(Other) ->
+    json_body(?raw(mmd_encode:encode_obj(Other))).
+
 
 mmd_to_json(<<?DOUBLE, Double:64/float, Rest/binary>>) ->
     {list_to_binary(float_to_list(Double)), Rest};

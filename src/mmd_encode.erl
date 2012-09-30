@@ -68,8 +68,6 @@ encode_obj(v1_1, Obj) when is_integer(Obj) ->
     end;
 encode_obj(_, Obj) when is_float(Obj) ->
     <<?DOUBLE, Obj:64/float>>;
-encode_obj(Vsn, Obj) when is_atom(Obj) ->
-    encode_obj(Vsn, atom_to_binary(Obj, utf8));
 
 encode_obj(_, true) -> <<?TRUE>>;
 encode_obj(_, false) -> <<?FALSE>>;
@@ -101,7 +99,11 @@ encode_obj(_, ?byte(Byte)) ->
 encode_obj(_, ?uuid(Data)) -> [?UUID, encode_uuid(Data)];
 encode_obj(_, ?secid(Data)) -> <<?SECID, Data>>;
 encode_obj(v1_1,  ?time(Data)) -> <<?FAST_TIME, Data:64>>;
-encode_obj(Vsn, Obj) when is_list(Obj) -> encode_obj(Vsn, ?array(Obj));
+
+encode_obj(Vsn, Obj) when is_atom(Obj) ->
+    encode_obj(Vsn, atom_to_binary(Obj, utf8));
+encode_obj(Vsn, Obj) when is_list(Obj) -> 
+    encode_obj(Vsn, ?array(Obj));
 encode_obj(Vsn, Obj) when is_tuple(Obj) ->
     encode_obj(Vsn, ?array(tuple_to_list(Obj)));
 
