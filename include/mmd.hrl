@@ -1,4 +1,7 @@
 -include_lib("p6core/include/p6core.hrl").
+-define(EXIT_ERROR,1).
+-define(EXIT_RESTART,2).
+
 %% Current (internal) codec
 -define(CODEC_MAJOR,1).
 -define(CODEC_MINOR,0).

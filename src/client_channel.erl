@@ -212,8 +212,14 @@ fire([[_,Pid,_]|Pids], M)->
 
 fire(undefined,M) -> ?lerr("Unable to send message to 'undefined': ~p",[M]),
                      {error,bad_pid};
-%%fire([_,Pid,_],Msg) -> fire(Pid,Msg);
-fire(Pid,Msg) when is_pid(Pid) ->
+fire(Pid,Msg=#channel_message{}) ->
+    case mmd_cm_direct:send(Pid,{call,Pid,self(),Msg}) of
+        undefined -> fire2(Pid,Msg);
+        ok -> {ok,Pid}
+    end;
+fire(Pid,Msg) -> fire2(Pid,Msg).
+
+fire2(Pid,Msg) when is_pid(Pid) ->
     case catch gen_server:call(Pid,{mmd,self(),Msg},?CHANNEL_DISPATCH_TIMEOUT) of
         ok -> {ok,Pid};
         {ok, NewPid} -> {ok, NewPid};

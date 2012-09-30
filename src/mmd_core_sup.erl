@@ -64,6 +64,14 @@ init([]) ->
     MaxSecondsBetweenRestarts = 5,
 
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
+    RanchSupSpec = {ranch_sup, {ranch_sup, start_link, []},
+                    permanent, 5000, supervisor, [ranch_sup]},
+    
+    RanchChildren = ranch:child_spec(cm_direct,5,
+                                     ranch_tcp, [],
+                                     mmd_ranch_cm_direct,
+                                     []),
+    
     Http = case application:get_env(http_port) of
                undefined -> [];
                {ok,Port} -> [?CHILD(mmd_web_cache,[],worker),?CHILD(mmd_cowboy_listener,[Port],worker)]
@@ -81,6 +89,9 @@ init([]) ->
 			 lists:map(fun proxy_child/1, Cfgs)
 		 end,
     Children = [
+                RanchSupSpec,
+                RanchChildren,
+                ?CHILD(mmd_cm_direct,worker),
                 ?CHILD(security_id_cache,worker),
                 ?CHILD(random_service,worker),
                 ?CHILD(client_channel_sup,supervisor),
