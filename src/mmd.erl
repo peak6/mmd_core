@@ -3,7 +3,7 @@
 -compile(export_all).
 
 start() ->
-    application:start(mmd).
+    p6app:start(mmd_core).
 
 chanStatN(Field,Min) when is_atom(Field) ->
     lists:filter(fun({_,{_,N}}) when N >= Min -> true;

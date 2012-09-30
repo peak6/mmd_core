@@ -11,7 +11,7 @@ REBAR=./rebar
 all: compile
 
 shell: compile
-	$(ERL)
+	$(ERL) -sname shell
 
 mmd: compile
 	deps/p6core/priv/scontrol -e dev -a mmd_core -c example/mmd.cfg  debug
