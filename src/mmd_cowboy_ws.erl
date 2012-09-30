@@ -177,7 +177,7 @@ ws_reply(Msg,Req,State=#state{type=Type}) ->
     {reply,{Type,encode(Msg,Type)},Req,State,hibernate}.
 
 
-encode(Msg,binary) -> mmd_encode:encode(Msg);
+encode(Msg,binary) -> mmd_encode:encode(v1_1, Msg);
 encode(Msg,text) -> okget:ok(json_encode:encode(Msg)).
 
 
@@ -194,4 +194,4 @@ xhr_reply(Msg,Req,State=#state{type=Type,xhr_cache=[],xhr_ref=Ref}) ->
     ?gsreply(Ref,{Type,Msg}),
     {ok,Req,State#state{xhr_ref=undefined}}.
 
-    
+

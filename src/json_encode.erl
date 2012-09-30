@@ -17,42 +17,105 @@
 -include("mmd.hrl").
 -include_lib("p6core/include/logger.hrl").
 
-encode(?raw(Bin)) -> encode(mmd_decode:decodeRawFull(Bin));
+encode(#channel_create{id=Id,
+                       body=Body,
+                       auth_token=AT,
+                       service=Svc,
+                       type=T}) ->
+    ATBin = list_to_binary(uuid:to_string(AT)),
+    {ok,
+     [json_head(T, Id),
+      <<"\"service\":\"", Svc/binary, "\",\"token\":\"", ATBin/binary, "\",">>,
+      json_body(Body)]};
+encode(#channel_message{id=Id, body=Body}) ->
+    {ok, [json_head(msg, Id), json_body(Body)]};
+encode(#channel_close{id=Id, body=Body}) ->
+    {ok, [json_head(close, Id), json_body(Body)]}.
 
-encode(Data) ->
-    Obj = encode_obj(Data),
-    {ok,json:encode(Obj)}.
+json_head(Type, Id) ->
+    TypeBin = p6str:mkbin(Type),
+    ChanIdBin = list_to_binary(uuid:to_string(Id)),
+    <<"{\"", TypeBin/binary, "\":\"", ChanIdBin/binary, "\",">>.
 
+json_body(?raw(Body)) ->
+    {JsonBody, <<>>} = mmd_to_json(Body),
+    [<<"\"body\":">>, JsonBody, $}].
 
+mmd_to_json(<<?DOUBLE, Double:64/float, Rest/binary>>) ->
+    {list_to_binary(float_to_list(Double)), Rest};
+mmd_to_json(<<?FLOAT, Float:32/float, Rest/binary>>) ->
+    {list_to_binary(float_to_list(Float)), Rest};
+mmd_to_json(<<?NULL, Data/binary>>) ->
+    {<<"null">>, Data};
+mmd_to_json(<<?TRUE, Data/binary>>) ->
+    {<<"true">>, Data};
+mmd_to_json(<<?FALSE, Data/binary>>) ->
+    {<<"false">>, Data};
+mmd_to_json(<<?UUID, UUID:16/binary, Rest/binary>>) ->
+    {[<<"{\"_mmd_uuid\":\"">>, list_to_binary(uuid:to_string(UUID)), <<"\"}">>],
+     Rest};
+mmd_to_json(<<?SECID, SecId:16/binary, Rest/binary>>) ->
+    {security_id:get_key(SecId), Rest};
+mmd_to_json(<<?BYTE, B, Rest/binary>>) ->
+    {list_to_binary(integer_to_list(B)), Rest};
+mmd_to_json(<<?FAST_STRING, Rest/binary>>) ->
+    {Sz, Rest2} = mmd_decode:tag_size(Rest),
+    <<Str:Sz/binary, Rest3/binary>> = Rest2,
+    {[$",
+      re:replace(Str, <<"[\"\\\\]">>, <<"\\\\&">>, [{return, binary}, global]),
+      $"],
+     Rest3};
+mmd_to_json(<<1:4, Sz:4, Int:Sz/unsigned-unit:8, Rest/binary>>) ->
+    {list_to_binary(integer_to_list(Int)), Rest};
+mmd_to_json(<<0:4, Sz:4, Int:Sz/signed-unit:8, Rest/binary>>) ->
+    {list_to_binary(integer_to_list(Int)), Rest};
+mmd_to_json(<<?FAST_TIME, Time:64/integer, Rest/binary>>) ->
+    {[<<"{\"_mmd_time\":">>, list_to_binary(integer_to_list(Time)), $}], Rest};
 
-uuidToStr(?uuid(UUID)) -> uuidToStr(UUID);
-uuidToStr(?secid(SECID)) -> uuidToStr(SECID);
-uuidToStr(Bin) -> list_to_binary(uuid:to_string(Bin)).
+mmd_to_json(<<?FAST_MAP, Rest/binary>>) ->
+    {Sz, Rest2} = mmd_decode:tag_size(Rest),
+    mmd_to_json_map(Rest2, Sz, []);
+mmd_to_json(<<?FAST_ARRAY, Rest/binary>>) ->
+    {Sz, Rest2} = mmd_decode:tag_size(Rest),
+    mmd_to_json_array(Rest2, Sz, []);
+mmd_to_json(<<?FAST_BYTES, Rest/binary>>) ->
+    {Sz, Rest2} = mmd_decode:tag_size(Rest),
+    <<Bytes:Sz/binary, Rest3/binary>> = Rest2,
+    {mmd_to_json(Bytes), Rest3};
+mmd_to_json(<<?FAST_ERROR, Rest1/binary>>) ->
+    {Code, Rest2} = mmd_to_json(Rest1),
+    {Obj, Rest3} = mmd_to_json(Rest2),
+    {[<<"{\"_mmd_error\":">>,
+      Code,
+      <<",\"msg\":">>,
+      Obj,
+      $}
+     ],
+     Rest3}.
 
+mmd_to_json_array(Bin, 0, []) ->
+    {<<"[]">>, Bin};
+mmd_to_json_array(Bin, 0, Acc) ->
+    {iolist_to_binary([$[, lists:reverse(Acc), $]]), Bin};
+mmd_to_json_array(Bin, Sz, Acc) ->
+    {E, Rem} = mmd_to_json(Bin),
+    mmd_to_json_array(Rem,
+                      Sz - 1,
+                      case Acc of
+                          [] -> [E];
+                          _ -> [E, $, | Acc]
+                      end).
 
-encode_obj(undefined) -> null;
-encode_obj(nil) -> null;
-encode_obj(null) -> null;
-encode_obj(true) -> true;
-encode_obj(false) -> false;
-encode_obj(A) when is_atom(A) -> p6str:mkbin(A);
-encode_obj(?error(C,M)) when is_integer(C) -> {obj,[{'_mmd_error',C},{msg,encode_obj(M)}]};
-encode_obj(?time(Time)) -> {obj,[{'_mmd_time',Time}]};
-encode_obj(#channel_create{id=Id,body=Body,auth_token=AT,service=Svc,type=T}) ->
-    {obj,[{T,uuidToStr(Id)},{service,Svc},{token,uuidToStr(AT)},{body,encode_obj(Body)}]};
-encode_obj(#channel_message{id=Id,body=Body}) -> {obj,[{msg,uuidToStr(Id)},{body,encode_obj(Body)}]};
-encode_obj(#channel_close{id=Id,body=Body}) ->{obj,[{close,uuidToStr(Id)},{body,encode_obj(Body)}]};
-encode_obj(?uuid(<<Id:36/binary>>)) -> {obj,[{'_mmd_uuid',Id}]};
-encode_obj(?uuid(<<Id:16/binary>>)) -> {obj,[{'_mmd_uuid',uuidToStr(Id)}]};
-%%encode_obj(?secid(Id)) -> {obj,[{'_mmd_secid',uuidToStr(Id)}]};
-encode_obj(?map(undefined)) -> {obj,[]};
-encode_obj(?map(Map)) -> {obj,lists:map(fun({K,V}) -> {p6str:mkbin(K),encode_obj(V)} end,Map)};
-encode_obj(?array(undefined)) -> [];
-encode_obj(?array(Arr)) -> lists:map(fun(V) -> encode_obj(V) end, Arr);
-encode_obj(?raw(Data)) -> encode_obj(mmd_decode:decodeRawFull(Data));
-encode_obj(?secid(Id)) -> security_id:get_key(Id);
-encode_obj(?bytes(Bin)) -> encode_obj(mmd_decode:decodeFull(Bin));
-encode_obj(T) when is_tuple(T) -> encode_obj(tuple_to_list(T));
-encode_obj(List) when is_list(List) -> lists:map(fun(X) -> encode_obj(X) end, List);
-encode_obj(Val) -> Val.
-
+mmd_to_json_map(Bin, 0, []) ->
+    {<<"{}">>, Bin};
+mmd_to_json_map(Bin, 0, Acc) ->
+    {iolist_to_binary([${, Acc, $}]), Bin};
+mmd_to_json_map(Bin, Sz, Acc) ->
+    {K, VBin} = mmd_to_json(Bin),
+    {V, Rem} = mmd_to_json(VBin),
+    mmd_to_json_map(Rem,
+                    Sz - 1,
+                    case Acc of
+                        [] -> [K, $:, V];
+                        _ -> [K, $:, V, $, | Acc]
+                    end).

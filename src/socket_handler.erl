@@ -151,17 +151,18 @@ handle_info({tcp, _, Data},
             State=#state{mmdCfg=MMDCfg,
                          socket=Socket,
                          chans=Chans,
-                         trace=Trace}) ->
+                         trace=Trace,
+                         vsn=Vsn}) ->
     inet:setopts(Socket, [{active, once}]),
-    Msg = mmd_decode:decodeRaw(Data),
+    Msg = mmd_decode:decode_head(Vsn, Data),
     case Trace of
         true -> ?linfo("Received from socket: ~w", [Msg]);
         false -> ok
     end,
     case Msg of
-        #channel_create{id=Id, service=Service, body=?raw(RawMap)}
+        #channel_create{id=Id, service=Service, body=Body}
           when Service == '$mmd'; Service == <<"$mmd">> ->
-            ?map(Map) = mmd_decode:decodeRawFull(RawMap),
+            ?map(Map) = mmd_decode:decode(Body),
             NewMMDCfg = mmd_cfg:update(MMDCfg,
                                        lists:map(fun({A, B}) ->
                                                          {p6str:mkatom(A), B}
@@ -218,13 +219,13 @@ code_change(_OldVsn, State, _Extra) ->
 dispatch(Msgs,State) when is_list(Msgs) ->
     lists:foreach(fun(M) -> dispatch(M,State) end, Msgs);
 
-dispatch(Msg, #state{socket=Socket,trace=Trace}) ->
+dispatch(Msg, #state{socket=Socket, trace=Trace, vsn=Vsn}) ->
     case Trace of
         true ->
             ?linfo("Sending to socket: ~w",[Msg]);
         _ -> ok
     end,
-    Bin = mmd_encode:encode(Msg),
+    Bin = mmd_encode:encode(Vsn, Msg),
     case gen_tcp:send(Socket,Bin) of
         {error,timeout} ->
             ?lerr("Socket send timeout occured, exiting"),

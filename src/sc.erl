@@ -75,10 +75,10 @@ connect() -> connect(9999).
 
 connect(Port) ->
     {ok,Sock} = gen_tcp:connect(localhost,Port,[{packet,4},binary,{active,false}]),
-    ok=gen_tcp:send(Sock,mmd_codec:vsn()),
+    ok=gen_tcp:send(Sock, ?latest_vsn_bin),
     {ok,Sock}.
 
 send(Socket,Msg) ->
-    gen_tcp:send(Socket,mmd_encode:encode_message(Msg)).
+    gen_tcp:send(Socket, mmd_encode:encode_message(Msg)).
 
 %% vim: ts=4:sts=4:sw=4:et:sta:

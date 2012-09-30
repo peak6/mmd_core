@@ -54,7 +54,7 @@ handle_call({mmd, From, Msg}, _From, Chans) ->
 		 channel_mgr:process_local(
 		   NewChans,
 		   case mmd_decode:decode(Raw) of
-		       {<<Topic/binary>>, _} ->
+		       <<Topic/binary>> ->
 			   mmd_msg:mkReply(CC, subs(Topic));
 		       _ ->
 			   mmd_msg:mkError(
@@ -68,7 +68,7 @@ handle_call({mmd, From, Msg}, _From, Chans) ->
          {NewChans, CC=#channel_create{type=sub, body=Raw}} ->
 	     {NewChans2, []} =
 		 case mmd_decode:decode(Raw) of
-		       {<<Topic/binary>>, _} ->
+		       <<Topic/binary>> ->
 			 Subs = subs(Topic),
 			 channel_mgr:process_local_set_data(
 			   NewChans,
