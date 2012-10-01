@@ -48,7 +48,8 @@ handle_call(get_pool,_From,State=#state{pool=Pool}) ->
 
 handle_call(get, _From, State=#state{pool=[]}) ->
     case new_socket(State) of
-        {ok,Socket,NewState} -> {reply,{ok,Socket},NewState}
+        {ok,Socket,NewState} -> {reply,{ok,Socket},NewState};
+	{error,_Reason,NewState} -> {reply,undefined,NewState}
     end;
 handle_call(get, _From, State=#state{pool=[Socket|Rest]}) ->
     {reply,{ok,Socket},State#state{pool=Rest}};
@@ -79,16 +80,21 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 new_socket(State=#state{name=Name,host=Host,port=Port}) ->
-    {ok,Socket} = gen_tcp:connect(Host,Port,
+    case gen_tcp:connect(Host,Port,
                                   [{packet,4},
                                    binary,
                                    {active,true},
 				   {nodelay,true},
 				   {buffer,?CM_SOCKET_BUFFER_SZ},
                                    {sndbuf,?CM_SOCKET_BUFFER_SZ}
-                                  ]),
-    ?ldebug("Connected: ~s/~p, port: ~s",[Name,Socket,name(Socket)]),
-    {ok,Socket,State}.
+                                  ]) of
+	{ok,Socket} ->
+	    ?ldebug("Connected: ~s/~p, port: ~s",[Name,Socket,name(Socket)]),
+	    {ok,Socket,State};
+	Other ->
+	    ?lwarn("Failed to connecto to: ~s, reason: ~p",[Name,Other]),
+	    {error,Other,State}
+    end.
 
 name(Sock) -> p6str:full_local_sock_bin(Sock).
 

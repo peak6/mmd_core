@@ -69,7 +69,7 @@ init([]) ->
     RanchSupSpec = {ranch_sup, {ranch_sup, start_link, []},
                     permanent, 5000, supervisor, [ranch_sup]},
     
-    RanchChildren = ranch:child_spec(cm_direct,5,
+    RanchChildren = ranch:child_spec(cm_direct,100,
                                      ranch_tcp, [{recbuf,?CM_SOCKET_BUFFER_SZ},{buffer,?CM_SOCKET_BUFFER_SZ}],
                                      mmd_ranch_cm_direct,[]),
     
