@@ -117,9 +117,14 @@ handle_call(Request, From, State) ->
     ?lwarn("Unexpected handle_call(~p, ~p, ~p)",[Request,From,State]),
     {reply,ok,State}.
 
+handle_cast({remove,Node,Pid},State) ->
+    ets:delete_object(?TABLE,{Node,Pid}),
+    {noreply,State};
+
 handle_cast(Msg, State) ->
     ?lwarn("Unexpected handle_cast(~p, ~p)",[Msg,State]),
     {noreply, State}.
+
 
 handle_info(Info, State) ->
     ?lwarn("Unexpected handle_info(~p, ~p)",[Info,State]),

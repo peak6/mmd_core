@@ -41,6 +41,7 @@ start_link(Node,Host,Port) ->
 init([Node,Host,Port]) ->
     Name = p6str:mkbin("~s (~s:~p)",[Node,Host,Port]),
     ?ldebug("Created pool for: ~s",[Name]),
+    erlang:monitor_node(Node,true),
     {ok,#state{name=Name,host=Host,port=Port}}.
 
 handle_call(get_pool,_From,State=#state{pool=Pool}) ->
@@ -68,6 +69,11 @@ handle_info({tcp_closed,Socket},State=#state{pool=Pool,name=Name}) ->
 
 handle_info({tcp,Socket,<<>>},State=#state{pool=Pool}) ->
     {noreply,State#state{pool=[Socket|Pool]}};
+
+handle_info({nodedown,Node},State) ->
+    gen_server:cast(mmd_cm_direct,{remove,Node,self()}),
+    ?ldebug("Node: ~p down, stopping pool",[Node]),
+    {stop,normal,State};
 
 handle_info(Info, State) ->
     ?lwarn("Unexpected handle_info(~p, ~p)",[Info,State]),
