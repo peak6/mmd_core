@@ -84,6 +84,7 @@ new_socket(State=#state{name=Name,host=Host,port=Port}) ->
                                    binary,
                                    {active,true},
 				   {nodelay,true},
+				   {buffer,?CM_SOCKET_BUFFER_SZ},
                                    {sndbuf,?CM_SOCKET_BUFFER_SZ}
                                   ]),
     ?ldebug("Connected: ~s/~p, port: ~s",[Name,Socket,name(Socket)]),

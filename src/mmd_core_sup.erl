@@ -70,7 +70,7 @@ init([]) ->
                     permanent, 5000, supervisor, [ranch_sup]},
     
     RanchChildren = ranch:child_spec(cm_direct,5,
-                                     ranch_tcp, [{recbuf,?CM_SOCKET_BUFFER_SZ}],
+                                     ranch_tcp, [{recbuf,?CM_SOCKET_BUFFER_SZ},{buffer,?CM_SOCKET_BUFFER_SZ}],
                                      mmd_ranch_cm_direct,[]),
     
     Http = case application:get_env(http_port) of
