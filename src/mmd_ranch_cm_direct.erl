@@ -15,6 +15,7 @@ start_link(ListenerPid, Socket, Transport, Opts) ->
 init(ListenerPid, Socket, Transport, [Name|_Opts]) ->
     ok = ranch:accept_ack(ListenerPid),
     Transport:setopts(Socket,[{packet,4}]),
+    process_flag(priority,high),
     loop(Socket, Name, Transport).
 
 trace(Fmt,Args) ->
@@ -26,6 +27,7 @@ trace(Fmt,Args) ->
 loop(Socket, Name, Transport) ->
     case Transport:recv(Socket, 0, ?SOCK_TIMEOUT) of
         {ok, Data} ->
+	    trace("Received stuff",[]),
 	    {ok,Opts} = inet:getopts(Socket,[sndbuf,recbuf,buffer]),
 	    {ok,Stats} = inet:getstat(Socket),
 	    trace("Received: ~p bytes, ~p,  opts: ~p, stats: ~p",[size(Data),Name,Opts,Stats]),
