@@ -21,6 +21,8 @@
 -export([send/2]).
 -export([get_socket/1]).
 
+-export([trace/0,notrace/0]).
+
 -export([get_pool/1, get_pool_cons/1]).
 -export([all_ports/0]).
 
@@ -39,6 +41,13 @@
 
 all_ports() -> ets:tab2list(?MAP).
 
+trace() -> application:set_env(mmd_core,mmd_cm_trace,true).
+notrace() -> application:set_env(mmd_core,mmd_cm_trace,false).
+trace(Fmt,Args) ->
+    case application:get_env(mmd_core,mmd_cm_trace) of
+	{ok,true} -> ?ldebug(Fmt,Args);
+	_ -> ok
+    end.
 
 send(Pid,Data) when is_pid(Pid) -> send(node(Pid),Data);
 send(Node,Data) when is_binary(Data) -> 
@@ -46,9 +55,9 @@ send(Node,Data) when is_binary(Data) ->
         {ok,Socket} -> 
 	    {ok,Opts} = inet:getopts(Socket,[sndbuf,recbuf,buffer]),
 	    {ok,Stats} = inet:getstat(Socket),
-	    ?ldebug("Sending: ~p bytes to ~p, opts: ~p, stats: ~p",[size(Data),Node,Opts,Stats]),
+	    trace("Sending: ~p bytes to ~p, opts: ~p, stats: ~p",[size(Data),Node,Opts,Stats]),
             case gen_tcp:send(Socket,Data) of
-		ok -> ?ldebug("Done sending to: ~p",[Node]);
+		ok -> trace("Done sending to: ~p",[Node]);
 		{error,closed} -> send(Node,Data);
 		Other -> Other
 	    end;
