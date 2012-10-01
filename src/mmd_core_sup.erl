@@ -24,6 +24,8 @@
 -define(CHILD(I, Args, Type), {I, {I, start_link, Args}, ?DEFAULT_RESTART, ?DEFAULT_SHUTDOWN, Type, [I]}).
 -define(CHILD(I, Type), {I, {I, start_link, []}, ?DEFAULT_RESTART, ?DEFAULT_SHUTDOWN, Type, [I]}).
 
+-include("mmd_cm.hrl").
+
 mmd_tcp_client_child({Name, Host, Port}) ->
     {Name,
      {mmd_tcp_client, start_link, [Name, Host, Port]},
@@ -68,9 +70,8 @@ init([]) ->
                     permanent, 5000, supervisor, [ranch_sup]},
     
     RanchChildren = ranch:child_spec(cm_direct,5,
-                                     ranch_tcp, [],
-                                     mmd_ranch_cm_direct,
-                                     []),
+                                     ranch_tcp, [{recbuf,?CM_SOCKET_BUFFER_SZ}],
+                                     mmd_ranch_cm_direct,[]),
     
     Http = case application:get_env(http_port) of
                undefined -> [];

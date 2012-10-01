@@ -17,7 +17,6 @@
 
 %% API
 -export([start_link/0]).
--export([t/0]).
 
 -export([send/2]).
 -export([get_socket/1]).
@@ -38,8 +37,8 @@
 -define(MAP,mmd_cm_direct_map).
 -define(TABLE,mmd_cm_direct_pools).
 
-t() -> mmd_cm_direct:send('dlb2@dlb-home',{a,b,c}). 
 all_ports() -> ets:tab2list(?MAP).
+
 
 send(Pid,Data) when is_pid(Pid) -> send(node(Pid),Data);
 send(Node,Data) when is_binary(Data) -> 

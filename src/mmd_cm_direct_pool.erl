@@ -24,6 +24,7 @@
          terminate/2, code_change/3]).
 
 -include("mmd.hrl").
+-include("mmd_cm.hrl").
 
 -record(state,{name,host,port,pool=[]}).
 
@@ -82,7 +83,8 @@ new_socket(State=#state{name=Name,host=Host,port=Port}) ->
                                   [{packet,4},
                                    binary,
                                    {active,true},
-                                   {sndbuf,500*1024}
+				   {nodelay,true},
+                                   {sndbuf,?CM_SOCKET_BUFFER_SZ}
                                   ]),
     ?ldebug("Connected: ~s/~p, port: ~s",[Name,Socket,name(Socket)]),
     {ok,Socket,State}.
