@@ -20,6 +20,9 @@ init(ListenerPid, Socket, Transport, [Name|_Opts]) ->
 loop(Socket, Name, Transport) ->
     case Transport:recv(Socket, 0, ?SOCK_TIMEOUT) of
         {ok, Data} ->
+	    {ok,Opts} = inet:getopts(Socket,[sndbuf,recbuf,buffer]),
+	    {ok,Stats} = inet:getstat(Socket),
+	    ?ldebug("Received: ~p bytes, ~p,  opts: ~p, stats: ~p",[size(Data),Name,Opts,Stats]),
             case erlang:binary_to_term(Data) of
                 {msg,To,From,Msg} ->
                     To ! {mmd,From,Msg};
