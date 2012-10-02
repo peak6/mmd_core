@@ -22,6 +22,7 @@
 -export([sendAll/2, send_all_matching/2]).
 -export([refToIds/2, removeRef/2]).
 -export([close_all/2]).
+-export([chan_count/1]).
 
 -record(state, {tid, max_chans}).
 -define(tid(S), S#state.tid).
@@ -32,7 +33,9 @@
 new() -> new(?MAX_CONCURRENT_CHANNELS).
 new(MaxChans) -> #state{tid = ets:new(channel_mgr, [set, {keypos, 2}]),
 			max_chans = MaxChans}.
-
+chan_count(State) ->
+    ets:info(?tid(State),size).
+    
 close_all(State,Body) ->
     ets:foldl(fun(#chan{id=Id,remote=Pid,ref=Ref},S) ->
 		      demonitor(Ref),
