@@ -21,7 +21,8 @@
 -export([send/2]).
 -export([get_socket/1]).
 
--export([trace/0,notrace/0]).
+-export([async_send/0,async_send/1]).
+-export([trace/0,trace/1]).
 
 -export([get_pool/1, get_pool_cons/1]).
 -export([all_ports/0]).
@@ -38,13 +39,20 @@
 
 -define(MAP,mmd_cm_direct_map).
 -define(TABLE,mmd_cm_direct_pools).
+-define(ASYNC_SEND,mmd_cm_direct_async).
+-define(TRACE,mmd_cm_direct_trace).
 
 all_ports() -> ets:tab2list(?MAP).
 
-trace() -> application:set_env(mmd_core,mmd_cm_trace,true).
-notrace() -> application:set_env(mmd_core,mmd_cm_trace,false).
+trace() -> trace(true).
+trace(Val) -> application:set_env(mmd_core,?TRACE,Val).
+
+async_send() -> async_send(true).
+async_send(Val) ->
+    application:set_env(mmd_core,?ASYNC_SEND,Val).
+
 trace(Fmt,Args) ->
-    case application:get_env(mmd_core,mmd_cm_trace) of
+    case application:get_env(mmd_core,?TRACE) of
 	{ok,true} -> ?ldebug(Fmt,Args);
 	_ -> ok
     end.
@@ -53,24 +61,28 @@ send(Pid,Data) when is_pid(Pid) -> send(node(Pid),Data);
 send(Node,Data) when is_binary(Data) -> 
     case get_socket(Node) of
         {ok,Socket} -> 
-	    Pid = spawn( fun() -> 
-				 trace("Sending: ~p bytes to ~p",[size(Data),Node]),
-				 case gen_tcp:send(Socket,Data) of
-				     ok -> trace("Done sending to: ~p - ~p",[Node,p6str:full_local_sock_bin(Socket)]);
-				     {error,closed} -> send(Node,Data);
-				     Other -> Other
-				 end
-			 end
-		       ),
-	    trace("Spawned dispatch proc: ~p for ~p",[Pid,Node]),
+	    case application:get_env(mmd_core,?ASYNC_SEND) of 
+		{ok,true} ->
+		    spawn(fun() -> send2(async,Socket,Node,Data) end);
+		_ ->
+		    send2(sync,Socket,Node,Data)
+	    end,
 	    ok;
         Other -> Other
     end;
 
 send(Node,Term) ->
     send(Node,term_to_binary(Term)).
-    
 
+send2(Type,Socket,Node,Data) ->
+    trace("~s send: ~p bytes to ~p",[Type,size(Data),Node]),
+    case gen_tcp:send(Socket,Data) of
+	ok -> trace("Done sending to: ~p - ~p",[Node,p6str:full_local_sock_bin(Socket)]);
+	{error,closed} -> send(Node,Data);
+	Other -> Other
+    end.
+
+	    
     
 get_socket(Node) -> 
     case get_pool(Node) of
