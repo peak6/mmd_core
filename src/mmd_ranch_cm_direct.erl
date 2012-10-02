@@ -27,10 +27,7 @@ trace(Fmt,Args) ->
 loop(Socket, Name, Transport) ->
     case Transport:recv(Socket, 0, ?SOCK_TIMEOUT) of
         {ok, Data} ->
-	    trace("Received stuff",[]),
-	    {ok,Opts} = inet:getopts(Socket,[sndbuf,recbuf,buffer]),
-	    {ok,Stats} = inet:getstat(Socket),
-	    trace("Received: ~p bytes, ~p,  opts: ~p, stats: ~p",[size(Data),Name,Opts,Stats]),
+	    trace("Received: ~p bytes from: ~p",[size(Data),Name]),
             case erlang:binary_to_term(Data) of
                 {msg,To,From,Msg} ->
                     To ! {mmd,From,Msg};
