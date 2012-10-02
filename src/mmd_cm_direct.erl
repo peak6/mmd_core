@@ -53,14 +53,17 @@ send(Pid,Data) when is_pid(Pid) -> send(node(Pid),Data);
 send(Node,Data) when is_binary(Data) -> 
     case get_socket(Node) of
         {ok,Socket} -> 
-	    {ok,Opts} = inet:getopts(Socket,[sndbuf,recbuf,buffer]),
-	    {ok,Stats} = inet:getstat(Socket),
-	    trace("Sending: ~p bytes to ~p, opts: ~p, stats: ~p",[size(Data),Node,Opts,Stats]),
-            case gen_tcp:send(Socket,Data) of
-		ok -> trace("Done sending to: ~p",[Node]);
-		{error,closed} -> send(Node,Data);
-		Other -> Other
-	    end;
+	    Pid = spawn( fun() -> 
+				 trace("Sending: ~p bytes to ~p",[size(Data),Node]),
+				 case gen_tcp:send(Socket,Data) of
+				     ok -> trace("Done sending to: ~p - ~p",[Node,p6str:full_local_sock_bin(Socket)]);
+				     {error,closed} -> send(Node,Data);
+				     Other -> Other
+				 end
+			 end
+		       ),
+	    trace("Spawned dispatch proc: ~p for ~p",[Pid,Node]),
+	    ok;
         Other -> Other
     end;
 
