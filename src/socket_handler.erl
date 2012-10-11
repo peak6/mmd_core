@@ -151,14 +151,10 @@ handle_info({tcp, _, Data},
             State=#state{mmdCfg=MMDCfg,
                          socket=Socket,
                          chans=Chans,
-                         trace=Trace,
                          vsn=Vsn}) ->
     inet:setopts(Socket, [{active, once}]),
     Msg = mmd_decode:decode_head(Vsn, Data),
-    case Trace of
-        true -> ?linfo("Received from socket: ~w", [Msg]);
-        false -> ok
-    end,
+    trc(State,"Received from socket",Msg),
     case Msg of
         #channel_create{id=Id, service=Service, body=Body}
           when Service == '$mmd'; Service == <<"$mmd">> ->
@@ -216,15 +212,15 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+trc(#state{trace=true},Txt,#channel_message{id=Id}) ->
+    ?ldebug("~s: ~s",[Txt,uuid:to_string(Id)]);
+trc(_,_,_) -> ok.
+
 dispatch(Msgs,State) when is_list(Msgs) ->
     lists:foreach(fun(M) -> dispatch(M,State) end, Msgs);
 
-dispatch(Msg, #state{socket=Socket, trace=Trace, vsn=Vsn}) ->
-    case Trace of
-        true ->
-            ?linfo("Sending to socket: ~w",[Msg]);
-        _ -> ok
-    end,
+dispatch(Msg, State=#state{socket=Socket, vsn=Vsn}) ->
+    trc(State,"Sending to socket",Msg),
     Bin = mmd_encode:encode(Vsn, Msg),
     case gen_tcp:send(Socket,Bin) of
         {error,timeout} ->

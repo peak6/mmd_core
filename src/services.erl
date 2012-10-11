@@ -112,7 +112,7 @@ init([]) ->
     mmd_node_cost:start_link(),
     mmd_node_tags:start_link(),
     cpu_load:start_link(),
-    p6dmap:new(?P6DMAP),
+    p6dmap:ensure(?P6DMAP),
     regLocal(?MODULE),
     registerConfigured(),
     timer:send_interval(500, update_svcs),
@@ -221,17 +221,21 @@ re_filter(MP, [E | Es], Acc) ->
     end.
 
 dispatchDiff(State=#state{chans=Chans}) ->
-    {All, Add, Rm} = calcDiff(State),
-    channel_mgr:send_all_matching(
-      fun (MP) ->
-	      case {re_filter(MP, Add), re_filter(MP, Rm)} of
-		  {[], []} -> false;
-		  {A, []} -> {true, ?map([{added, ?array(A)}])};
-		  {[], R} -> {true, ?map([{removed, ?array(R)}])};
-		  {A, R} -> {true, ?map([{added, ?array(A)}, {removed,?array(R)}]})
-	      end
-      end, Chans),
-    All.
+    case channel_mgr:chan_count(Chans) of
+	0 -> sets:from_list(services:allServiceNames());
+	_ ->
+	    {All, Add, Rm} = calcDiff(State),
+	    channel_mgr:send_all_matching(
+	      fun (MP) ->
+		      case {re_filter(MP, Add), re_filter(MP, Rm)} of
+			  {[], []} -> false;
+			  {A, []} -> {true, ?map([{added, ?array(A)}])};
+			  {[], R} -> {true, ?map([{removed, ?array(R)}])};
+			  {A, R} -> {true, ?map([{added, ?array(A)}, {removed,?array(R)}]})
+		      end
+	      end, Chans),
+	    All
+	end.
 
 calcDiff(#state{known=Known}) ->
     All = sets:from_list(services:allServiceNames()),

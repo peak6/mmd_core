@@ -42,17 +42,21 @@ init([]) ->
 	    {_,_,Vsn} = lists:keyfind(mmd_core,1,application:loaded_applications()),
 	    Cookie = erlang:get_cookie(),
             Ping = #ping{env=Env,node=node(),cookie=Cookie,version=Vsn},
-            {ok,Sock} = gen_udp:open(Port,[binary,
+	    case gen_udp:open(Port,[binary,
                                            {active,true},
                                            {reuseaddr,true},
                                            {multicast_ttl,64},
                                            {add_membership,{Addr,{0,0,0,0}}}
-                                          ]),
-	    
-	    State = #state{node=node(),cookie=Cookie,version=Vsn,ignore=[],env=Env,sock=Sock,port=Port,ping=Ping,addr=Addr},
-	    send_ping(State),
-	    timer:send_interval(?PING_TIME,send_ping),
-            {ok,State}
+                                          ]) of
+		{ok,Sock} -> 
+		    State = #state{node=node(),cookie=Cookie,version=Vsn,ignore=[],env=Env,sock=Sock,port=Port,ping=Ping,addr=Addr},
+		    send_ping(State),
+		    timer:send_interval(?PING_TIME,send_ping),
+		    {ok,State};
+		{error,eaddrinuse} ->
+		    ?lwarn("Autodiscover disabled due to mcast address being in use, you are probably on a mac"),
+		    {ok,#state{}}
+	    end
     end.
 
 handle_call(Request, From, State) ->

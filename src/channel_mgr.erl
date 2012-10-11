@@ -22,6 +22,7 @@
 -export([sendAll/2, send_all_matching/2]).
 -export([refToIds/2, removeRef/2]).
 -export([close_all/2]).
+-export([chan_count/1]).
 
 -record(state, {tid, max_chans}).
 -define(tid(S), S#state.tid).
@@ -32,7 +33,9 @@
 new() -> new(?MAX_CONCURRENT_CHANNELS).
 new(MaxChans) -> #state{tid = ets:new(channel_mgr, [set, {keypos, 2}]),
 			max_chans = MaxChans}.
-
+chan_count(State) ->
+    ets:info(?tid(State),size).
+    
 close_all(State,Body) ->
     ets:foldl(fun(#chan{id=Id,remote=Pid,ref=Ref},S) ->
 		      demonitor(Ref),
@@ -172,14 +175,6 @@ process_remote_get_data(State,_From,M=#channel_close{id=Id}) ->
 
 fire(To,Msg) -> fire(self(),To,Msg).
 
-%% Attempt to send channel_messages over a direct socket
-fire(From,To,Msg=#channel_message{}) ->
-    case mmd_cm_direct:send(To,{msg,To,From,Msg}) of
-        ok -> ok;
-        undefined -> fire2(From,To,Msg);
-        Other -> ?lerr("Error writing to cm_direct: ~p",[Other]),
-                 fire2(From,To,Msg)
-    end;
 fire(From,To,Msg) -> fire2(From,To,Msg).
 
 fire2(From,To,Msg) -> 
