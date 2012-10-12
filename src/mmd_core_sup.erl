@@ -24,6 +24,8 @@
 -define(CHILD(I, Args, Type), {I, {I, start_link, Args}, ?DEFAULT_RESTART, ?DEFAULT_SHUTDOWN, Type, [I]}).
 -define(CHILD(I, Type), {I, {I, start_link, []}, ?DEFAULT_RESTART, ?DEFAULT_SHUTDOWN, Type, [I]}).
 
+-include("mmd_cm.hrl").
+
 mmd_tcp_client_child({Name, Host, Port}) ->
     {Name,
      {mmd_tcp_client, start_link, [Name, Host, Port]},
@@ -64,6 +66,12 @@ init([]) ->
     MaxSecondsBetweenRestarts = 5,
 
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
+    RanchSupSpec = {ranch_sup, {ranch_sup, start_link, []},
+                    permanent, 5000, supervisor, [ranch_sup]},
+    
+    RanchChildren = ranch:child_spec(cm_direct,100,
+                                     ranch_tcp, [{recbuf,?CM_SOCKET_BUFFER_SZ},{buffer,?CM_SOCKET_BUFFER_SZ}],
+                                     mmd_ranch_cm_direct,[]),
     
     Http = case application:get_env(http_port) of
                undefined -> [];
@@ -82,6 +90,9 @@ init([]) ->
 			 lists:map(fun proxy_child/1, Cfgs)
 		 end,
     Children = [
+                RanchSupSpec,
+                RanchChildren,
+                ?CHILD(mmd_cm_direct,worker),
                 ?CHILD(security_id_cache,worker),
                 ?CHILD(random_service,worker),
                 ?CHILD(client_channel_sup,supervisor),

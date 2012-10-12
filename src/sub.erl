@@ -65,7 +65,7 @@ handle_call({mmd, From, Msg}, _From, Chans) ->
              end;
          {NewChans, CC=#channel_create{type=sub, body=Body, id=ChanId}} ->
 	     case Body of
-		 Raw = ?raw(_) -> Obj = mmd_decode:decode(Raw);
+		 Raw = ?raw(_) -> {Obj,_} = mmd_decode:decode(Raw);
 		 Obj -> Obj
 	     end,
              case mmd_decode:decode(Obj) of
@@ -81,8 +81,7 @@ handle_call({mmd, From, Msg}, _From, Chans) ->
                                     NewChans);
                          _ -> bad_sub(CC, NewChans)
                      end;
-                 T ->
-                     ?lwarn("bad sub: ~p", [T]),
+                 _ ->
                      bad_sub(CC, NewChans)
              end;
          {NewChans, CM=#channel_message{}} ->

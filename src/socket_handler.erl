@@ -150,15 +150,14 @@ handle_info({tcp,_,<<?PING>>},State=#state{socket=Socket}) ->
 handle_info({tcp, _, Data},
             State=#state{mmdCfg=MMDCfg,
                          socket=Socket,
-                         chans=Chans,
-                         vsn=Vsn}) ->
+                         chans=Chans}) ->
     inet:setopts(Socket, [{active, once}]),
-    Msg = mmd_decode:decode_head(Vsn, Data),
+    Msg = mmd_decode:decodeRaw(Data),
     trc(State,"Received from socket",Msg),
     case Msg of
-        #channel_create{id=Id, service=Service, body=Body}
+        #channel_create{id=Id, service=Service, body=?raw(RawMap)}
           when Service == '$mmd'; Service == <<"$mmd">> ->
-            ?map(Map) = mmd_decode:decode(Body),
+            ?map(Map) = mmd_decode:decodeRawFull(RawMap),
             NewMMDCfg = mmd_cfg:update(MMDCfg,
                                        lists:map(fun({A, B}) ->
                                                          {p6str:mkatom(A), B}
@@ -219,9 +218,9 @@ trc(_,_,_) -> ok.
 dispatch(Msgs,State) when is_list(Msgs) ->
     lists:foreach(fun(M) -> dispatch(M,State) end, Msgs);
 
-dispatch(Msg, State=#state{socket=Socket, vsn=Vsn}) ->
+dispatch(Msg, State=#state{socket=Socket}) ->
     trc(State,"Sending to socket",Msg),
-    Bin = mmd_encode:encode(Vsn, Msg),
+    Bin = mmd_encode:encode(Msg),
     case gen_tcp:send(Socket,Bin) of
         {error,timeout} ->
             ?lerr("Socket send timeout occured, exiting"),

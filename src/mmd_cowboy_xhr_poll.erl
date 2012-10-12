@@ -21,7 +21,7 @@ handle(OReq,Cfg) ->
 terminate(_Req,_Cfg) ->
     ok.
 
-encode(Msg,binary) -> mmd_encode:encode(v1_1, Msg);
+encode(Msg,binary) -> mmd_encode:encode(Msg);
 encode(Msg,text) -> okget:ok(json_encode:encode(Msg)).
 
 not_found(Id,Req,Cfg) ->

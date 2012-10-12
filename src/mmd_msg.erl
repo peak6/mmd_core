@@ -38,32 +38,28 @@ error(To,InMsg,ErrCode,ErrFmt,ErrArgs) ->
 error(To,InMsg,ErrCode,ErrBody) ->
     dispatch(To,mkError(InMsg,ErrCode,ErrBody)).
 
-close(To, Id, Body) when is_binary(Id) ->
-    dispatch(To, #channel_close{id=Id, body=?raw(mmd_encode:encode_obj(Body))});
-close(To, InMsg, Body) -> close(To, getID(InMsg), Body).
+close(To,Id,Body) when is_binary(Id) -> dispatch(To,#channel_close{id=Id,body=Body});
+close(To,InMsg,Body) -> close(To,getID(InMsg),Body).
 
 reply(To,RefId,OutBody) ->
     dispatch(To,mkReply(RefId,OutBody)).
 
 
-mkError(#channel_message{id=Id}, Code, Body) ->
-    mkError(Id, Code, ?raw(mmd_encode:encode_obj(Body)));
-mkError(#channel_create{id=Id}, Code, Body) ->
-    mkError(Id, Code, ?raw(mmd_encode:encode_obj(Body)));
-mkError(Id, Code, Body) ->
-    #channel_close{id=Id, body=?raw(mmd_encode:encode_obj(?error(Code, Body)))}.
+mkError(#channel_message{id=Id},Code,Body) -> mkError(Id,Code,Body);
+mkError(#channel_create{id=Id},Code,Body) -> mkError(Id,Code,Body);
+mkError(Id,Code,Body) -> #channel_close{id=Id,body=?error(Code,Body)}.
 
 mkReply(Id,Body) when is_binary(Id) ->
-    #channel_message{id=Id, body=?raw(mmd_encode:encode_obj(Body))};
-mkReply(#channel_create{id=Id,type=call}, Body) ->
-    #channel_close{id=Id, body=?raw(mmd_encode:encode_obj(Body))};
+    #channel_message{id=Id,body=Body};
+mkReply(#channel_create{id=Id,type=call},Body) ->
+    #channel_close{id=Id,body=Body};
 mkReply(#channel_create{id=Id},Body) ->
-    #channel_message{id=Id, body=?raw(mmd_encode:encode_obj(Body))};
+    #channel_message{id=Id,body=Body};
 mkReply(#channel_message{id=Id},Body) ->
-    #channel_message{id=Id, body=?raw(mmd_encode:encode_obj(Body))}.
+    #channel_message{id=Id,body=Body}.
 
 sendMsg(To,Id,Body) ->
-    dispatch(To,#channel_message{id=Id,body=?raw(mmd_encode:encode_obj(Body))}).
+    dispatch(To,#channel_message{id=Id,body=Body}).
 
 dispatch(To,Msg) ->
     dispatch(self(),To,Msg).

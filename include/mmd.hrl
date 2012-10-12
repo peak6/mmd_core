@@ -3,12 +3,16 @@
 -define(EXIT_RESTART,2).
 
 %% Current (internal) codec
--define(latest_vsn, v1_1).
--define(latest_vsn_bin, <<1, 1>>).
+-define(CODEC_MAJOR,1).
+-define(CODEC_MINOR,0).
+-define(CODEC_VERSION,<<?CODEC_MAJOR:8,?CODEC_MINOR:8>>).
 
 -define(MAX_CONCURRENT_CHANNELS,0). % 0 mean unlimited
 -define(CHANNEL_DISPATCH_TIMEOUT,300000). %% 5 minutes
 -define(NO_AUTH,<<0:128>>).
+
+-define(TAG_WITH_SIZE(Tag, Sz, Data),
+        <<Tag, 0:4, SSz:4, Sz:SSz/signed-unit:8, Data/binary>>).
 
 -type uuid() :: binary().
 -type authToken() :: uuid().

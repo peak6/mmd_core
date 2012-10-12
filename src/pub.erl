@@ -53,7 +53,7 @@ handle_call({mmd, From, Msg=#channel_create{type=call, body=Raw}},
     case channel_mgr:process_remote(Chans, From, Msg) of
         {NewChans, CC} ->
             R = case mmd_decode:decode(Raw) of
-                    ?map(M) ->
+                    {?map(M), _} ->
                         case p6props:any([<<"topic">>, <<"body">>], M) of
                             [<<Topic/binary>>, Body] when Body =/= undefined ->
                                 mmd_msg:mkReply(CC, pub(Topic, Body));
@@ -70,7 +70,7 @@ handle_call({mmd, From, Msg=#channel_create{type=sub, body=Body}},
     case Body of
 	Raw = ?raw(_) ->
 	    Topic = case mmd_decode:decode(Raw) of
-			<<T/binary>> -> T;
+			{<<T/binary>>, _} -> T;
 			_ -> undefined
 		    end;
 	Topic when is_binary(Topic) ->

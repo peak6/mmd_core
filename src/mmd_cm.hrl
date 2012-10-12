@@ -1,0 +1,1 @@
+-define(CM_SOCKET_BUFFER_SZ,64*1024*1024).
