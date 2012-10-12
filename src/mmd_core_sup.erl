@@ -86,7 +86,6 @@ init([]) ->
                 ?CHILD(random_service,worker),
                 ?CHILD(client_channel_sup,supervisor),
 		?CHILD(mmd_services_sup,supervisor),
-                ?CHILD(mmd_monitor,worker),
                 ?CHILD(services,worker),
                 ?CHILD(service_locations,worker),
                 ?CHILD(create_tracker,worker),

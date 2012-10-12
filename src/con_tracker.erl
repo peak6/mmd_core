@@ -39,7 +39,7 @@
 -define(SERVER, ?MODULE).
 
 -define(TABLE,mmd_cons).
--record(con_info,{type,name,pid,port,start=os:timestamp(),ref,impl,vsn}).
+-include("con_tracker.hrl").
 
 %%%===================================================================
 %%% API
