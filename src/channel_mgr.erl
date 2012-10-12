@@ -175,17 +175,7 @@ process_remote_get_data(State,_From,M=#channel_close{id=Id}) ->
 
 fire(To,Msg) -> fire(self(),To,Msg).
 
-%% Attempt to send channel_messages over a direct socket
-fire(From,To,Msg=#channel_message{}) ->
-    case mmd_cm_direct:send(To,{msg,To,From,Msg}) of
-        ok -> ok;
-        undefined -> fire2(From,To,Msg);
-        Other -> ?lerr("Error writing to cm_direct: ~p",[Other]),
-                 fire2(From,To,Msg)
-    end;
-fire(From,To,Msg) -> fire2(From,To,Msg).
-
-fire2(From,To,Msg) -> 
+fire(From,To,Msg) -> 
     To ! {mmd,From,Msg}.
 
 refToIds(State, Ref) ->
