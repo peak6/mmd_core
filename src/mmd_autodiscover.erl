@@ -20,10 +20,12 @@
 
 -define(SERVER, ?MODULE).
 -define(PING_TIME,30000).  %Ping every 30 seconds
+-define(UPDATE_KNOWN,10000).
+-define(RECONNECT_KNOWN,10000).
 
 -include_lib("p6core/include/p6core.hrl").
 
--record(state, {ignore,node,env,cookie,version,sock,addr,port,ping}).
+-record(state, {known_nodes=[],ignore,node,env,cookie,version,sock,addr,port,ping}).
 -record(ping,{env,node,cookie,version}).
 
 ping() ->
@@ -52,6 +54,8 @@ init([]) ->
 		    State = #state{node=node(),cookie=Cookie,version=Vsn,ignore=[],env=Env,sock=Sock,port=Port,ping=Ping,addr=Addr},
 		    send_ping(State),
 		    timer:send_interval(?PING_TIME,send_ping),
+		    timer:send_interval(?UPDATE_KNOWN,update_known),
+		    timer:send_interval(?RECONNECT_KNOWN,reconnect_known),
 		    {ok,State};
 		{error,eaddrinuse} ->
 		    ?lwarn("Autodiscover disabled due to mcast address being in use, you are probably on a mac"),
@@ -84,6 +88,13 @@ handle_info({udp,Sock,FromIP,Port,Bin},State=#state{sock=Sock,port=Port,ignore=I
 	    end
     end;
 
+handle_info(reconnect_known,State) ->
+    reconnect_known(State),
+    {noreply,State};
+
+handle_info(update_known,State) ->
+    {noreply,update_known(State)};
+
 handle_info(send_ping,State) ->
     send_ping(State),
     {noreply,State};
@@ -98,6 +109,30 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
+update_known(State=#state{known_nodes=Known}) ->
+    New = lists:foldl(
+	    fun(Node,Acc) ->
+		    case lists:member(Node,Acc) of
+			true -> Acc;
+			false -> [Node|Acc]
+		    end
+	    end, Known, nodes()),
+    State#state{known_nodes=New}.
+
+reconnect_known(#state{known_nodes=Known}) ->
+    Nodes = nodes(),
+    lists:foreach(
+      fun(Node) ->
+	      case lists:member(Node,Nodes) of
+		  true -> ok;
+		  false ->
+		      case net_adm:ping(Node) of
+			  pong -> ?linfo("Reconnected to: ~p",[Node]);
+			  pang -> ok
+		      end
+	      end
+      end, Known).
+			  
 
 send_ping(#state{sock=Sock,addr=Addr,port=Port,ping=Ping}) ->
     ok = gen_udp:send(Sock,Addr,Port,term_to_binary(Ping)).
@@ -145,3 +180,4 @@ process(Ping=#ping{node=Node},State) ->
 process(Other,State) ->
     ?ldebug("Unrecognized ping, adding: ~p to ignore list",[Other]),
     ignore(Other,State).
+
