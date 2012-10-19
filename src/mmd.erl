@@ -8,6 +8,9 @@ start() ->
     application:start(mmd).
 
 add_tag(Tag) -> mmd_node_tags:add(Tag).
+get_tags() -> mmd_node_tags:get().
+del_tag(Tag) -> mmd_node_tags:remove(Tag).
+
 
 channels() ->
     client_channel_sup:getChannels().
