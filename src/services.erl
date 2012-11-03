@@ -176,7 +176,7 @@ handle_call({mmd, From, CC=#channel_create{type=call,body=SvcPattern}}, _From, S
 handle_call({mmd, From, CC=#channel_create{type=sub, body=SvcPattern}}, _From,
 	    State=#state{chans=Chans}) ->
     case decode_pattern(SvcPattern) of
-	{error,Reason} -> 
+	{error,Reason} ->
 	    mmd_msg:error(From, CC, ?INVALID_REQUEST,
 			  "Error, bad request: ~p",[Reason]),
 	    {reply, ok, State};
@@ -300,6 +300,8 @@ decode_pattern(Data) ->
     case mmd_decode:decode(Data) of
 	Bin when is_binary(Bin) -> {ok,Bin};
 	{Bin,_} when is_binary(Bin) -> {ok,Bin};
+	{undefined,_} -> {ok,<<>>};
+	undefined -> {ok,<<>>};
 	Other -> {error,Other}
     end.
 	    
