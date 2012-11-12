@@ -119,6 +119,9 @@ handle_cast(Msg, State) ->
     ?lwarn("Unexpected handle_cast(~p, ~p)",[Msg,State]),
     {noreply, State}.
 
+handle_info({nodedown,_Node},State) -> %% Supress node down messages, we only care about nodeup
+    {noreply,State};
+
 handle_info({nodeup,Node},State) ->
     get_cost(Node),
     {noreply,State};

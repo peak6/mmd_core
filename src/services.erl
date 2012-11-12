@@ -139,7 +139,6 @@ handle_info(Info, State) ->
     {noreply, State}.
 
 
-
 handle_call({mmd, From, CC=#channel_create{type=call,body=?raw(<<"N">>)}}, _From, State) ->
     mmd_msg:reply(From, CC, allServiceNames()),
     {reply, ok, State};
@@ -149,61 +148,64 @@ handle_call({mmd, From, CC=#channel_create{type=call,body=undefined}}, _From, St
     {reply, ok, State};
 
 handle_call({mmd, From, CC=#channel_create{type=call,body=SvcPattern}}, _From, State) ->
-    Str = case mmd_decode:decode(SvcPattern) of
-	      {S, _Rst} -> S;
-	      S -> S
-	  end,
-    case re:compile(Str) of
-	{ok, MP} ->
-	    Ret = lists:foldl(fun(Svc,Acc) ->
-				      SB = p6str:mkbin(Svc),
-				      case re:run(SB, MP) of
-					  nomatch -> Acc;
-					  _ -> [SB|Acc]
-				      end
-			      end,
-			      [],
-			      allServiceNames()),
-	    mmd_msg:reply(From, CC, Ret);
-	{error, {ErrString, Pos}} ->
+    case decode_pattern(SvcPattern) of
+	{error,Reason} -> 
 	    mmd_msg:error(From, CC, ?INVALID_REQUEST,
-			  "Failed to compile regex: reason: ~p, "
-			  "pos: ~p, regex: ~p", [ErrString, Pos, SvcPattern])
+			  "Error, bad request: ~p",[Reason]);
+	{ok,Str} ->
+	    case re:compile(Str) of
+		{ok, MP} ->
+		    Ret = lists:foldl(fun(Svc,Acc) ->
+					      SB = p6str:mkbin(Svc),
+					      case re:run(SB, MP) of
+						  nomatch -> Acc;
+						  _ -> [SB|Acc]
+					      end
+				      end,
+				      [],
+				      allServiceNames()),
+		    mmd_msg:reply(From, CC, Ret);
+		{error, {ErrString, Pos}} ->
+		    mmd_msg:error(From, CC, ?INVALID_REQUEST,
+				  "Failed to compile regex: reason: ~p, "
+				  "pos: ~p, regex: ~p", [ErrString, Pos, SvcPattern])
+	    end
     end,
     {reply,ok,State};
 
 handle_call({mmd, From, CC=#channel_create{type=sub, body=SvcPattern}}, _From,
 	    State=#state{chans=Chans}) ->
-    case case mmd_decode:decode(SvcPattern) of
-	     {nil, _Rst} -> re:compile("");
-	     {undefined, _Rst} -> re:compile("");
-	     {Str, _Rst} -> re:compile(Str);
-	     undefined -> re:compile("");
-	     S -> re:compile(S)
-	 end of
-	{ok, MP} ->
-	    case channel_mgr:process_remote(Chans, From, CC, MP) of
-		{NewChans, _Msg} ->
-		    All = dispatchDiff(State),
-		    Filtered =
-			sets:fold(fun (Svc, Svcs) ->
-					  case re:run(p6str:mkbin(Svc), MP) of
-					      nomatch -> Svcs;
-					      _ -> [Svc | Svcs]
-					  end
-				  end,
-				  [],
-				  All),
-		    mmd_msg:reply(From, CC, ?map([{added, ?array(Filtered)}])),
-		    {reply, ok, State#state{known=All, chans=NewChans}};
-		NewChans ->
-		    {reply, ok, State#state{chans=NewChans}}
-	    end;
-	{error, {ErrString, Pos}} ->
+    case decode_pattern(SvcPattern) of
+	{error,Reason} ->
 	    mmd_msg:error(From, CC, ?INVALID_REQUEST,
-			  "Failed to compile regex: reason: ~p, "
-			  "pos: ~p, regex: ~p", [ErrString, Pos, SvcPattern]),
-	    {reply, ok, State}
+			  "Error, bad request: ~p",[Reason]),
+	    {reply, ok, State};
+	{ok,Str} ->
+	    case re:compile(Str) of
+		{ok, MP} ->
+		    case channel_mgr:process_remote(Chans, From, CC, MP) of
+			{NewChans, _Msg} ->
+			    All = dispatchDiff(State),
+			    Filtered =
+				sets:fold(fun (Svc, Svcs) ->
+						  case re:run(p6str:mkbin(Svc), MP) of
+						      nomatch -> Svcs;
+						      _ -> [Svc | Svcs]
+						  end
+					  end,
+					  [],
+					  All),
+			    mmd_msg:reply(From, CC, ?map([{added, ?array(Filtered)}])),
+			    {reply, ok, State#state{known=All, chans=NewChans}};
+			NewChans ->
+			    {reply, ok, State#state{chans=NewChans}}
+		    end;
+		{error, {ErrString, Pos}} ->
+		    mmd_msg:error(From, CC, ?INVALID_REQUEST,
+				  "Failed to compile regex: reason: ~p, "
+				  "pos: ~p, regex: ~p", [ErrString, Pos, SvcPattern]),
+		    {reply, ok, State}
+	    end
     end;
 
 handle_call({mmd, From, M=#channel_close{}}, _From,
@@ -293,5 +295,15 @@ filter_min_cost([First=[FirstNode,_,_]|Items]) ->
 	  {FirstCost,[First]},
 	  Items),
     Filtered.
+
+decode_pattern(Data) ->
+    case mmd_decode:decode(Data) of
+	Bin when is_binary(Bin) -> {ok,Bin};
+	{Bin,_} when is_binary(Bin) -> {ok,Bin};
+	{undefined,_} -> {ok,<<>>};
+	undefined -> {ok,<<>>};
+	Other -> {error,Other}
+    end.
+	    
 
 %% vim: ts=4:sts=4:sw=4:et:sta:
