@@ -81,6 +81,8 @@
 -define(TIMEOUT,10).
 -define(SERVICE_BUSY,11).
 
+-define(DOUBLE_NAN,<<16#7F,16#F8,0,0,0,0,0,0>>).
+-define(DOUBLE_INF,<<16#7F,16#F0,0,0,0,0,0,0>>).
 
 %% See protocol.txt for details of these
 %% Message Types

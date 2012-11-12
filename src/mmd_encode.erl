@@ -46,6 +46,10 @@ encode_obj(?secid(Data)) ->
     [?SECID,encode_type(secid,Data)];
 encode_obj(?time(Data)) ->
     [?VARINT_TIME,encode_type(date,Data)];
+encode_obj(nan) ->
+    [?DOUBLE,?DOUBLE_NAN];
+encode_obj(infinity) ->
+    [?DOUBLE,?DOUBLE_INF];
 %% exact types
 encode_obj(true) -> [?TRUE];
 encode_obj(false) -> [?FALSE];

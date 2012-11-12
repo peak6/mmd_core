@@ -181,6 +181,10 @@ decode_type(varint64,Bin) ->
     decode_varint(Bin);
 decode_type(double,<<Double:64/float,Rest/binary>>) ->
     {Double,Rest};
+decode_type(double,<<16#7F,16#F0,0,0,0,0,0,0,Rest/binary>>) ->
+    {infinity,Rest};
+decode_type(double,<<16#7F,16#F:4,_:4,0,0,0,0,0,0,Rest/binary>>) ->
+    {nan,Rest};
 decode_type(float,<<Float:32/float,Rest/binary>>) ->
     {Float,Rest};
 decode_type(time,Bin) ->
