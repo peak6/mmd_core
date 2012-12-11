@@ -218,14 +218,18 @@ trc(_,_,_) -> ok.
 dispatch(Msgs,State) when is_list(Msgs) ->
     lists:foreach(fun(M) -> dispatch(M,State) end, Msgs);
 
-dispatch(Msg, State=#state{socket=Socket}) ->
+dispatch(Msg, State=#state{socket=Socket,sockName=SName,chans=Chans}) ->
     trc(State,"Sending to socket",Msg),
     Bin = mmd_encode:encode(Msg),
     case gen_tcp:send(Socket,Bin) of
         {error,timeout} ->
-            ?lerr("Socket send timeout occured, exiting"),
+            ?lerr("Socket send timeout occured, exiting: ~p",[SName]),
             flush(),
             exit({socket_error,send_timeout});
+	{error,closed} ->
+	    ?lerr("Socket closed while writing to: ~p",[SName]),
+	    channel_mgr:close_all(Chans,?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,<<"Connection closed">>)),
+	    exit(normal);
         {error,Other} ->
             ?lerr("Error sending to socket, exiting.  ERROR: ~p",[Other]),
             flush(),

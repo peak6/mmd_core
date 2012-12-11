@@ -23,8 +23,16 @@ init([]) ->
     services:regGlobal(?SERVICE),
     {ok,nostate}.
 
-handle_call({mmd,From,Msg},_From,State) ->
+handle_call({mmd,From,Msg=#channel_create{type=call}},_From,State) ->
     mmd_msg:reply(From,Msg,?map(services:service2Nodes())),
+    {reply,ok,State};
+
+handle_call({mmd,From,Msg=#channel_create{type=sub}},_From,State) ->
+    mmd_msg:error(From,Msg,?INVALID_REQUEST,"Subscribe not supported for: ~s",[?SERVICE]),
+    {reply,ok,State};
+
+handle_call(M={mmd,_,#channel_close{}},_From,State) ->
+    ?lwarn("Should have never received this: ~p",[M]),
     {reply,ok,State};
 
 handle_call(Request, From, State) ->
