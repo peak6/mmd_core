@@ -7,7 +7,6 @@
 -define(CODEC_MINOR,0).
 -define(CODEC_VERSION,<<?CODEC_MAJOR:8,?CODEC_MINOR:8>>).
 
--define(MAX_CONCURRENT_CHANNELS,0). % 0 mean unlimited
 -define(CHANNEL_DISPATCH_TIMEOUT,300000). %% 5 minutes
 -define(NO_AUTH,<<0:128>>).
 

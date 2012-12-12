@@ -63,20 +63,12 @@ process(Listeners) -> process(Listeners,[]).
 process([],Acc) -> lists:reverse(Acc);
 process([{mmd,Opts}|Listeners], Acc) ->
     process(Listeners,[?NCHILD(
-                          get(name,make_ref(),Opts),
+                          make_ref(),
                           socket_listener,
-                          [get(port, 0, Opts),
-			   get(max_chans_per_sock,
-			       ?MAX_CONCURRENT_CHANNELS,
-			       Opts)],
+                          [Opts],
                           worker)|Acc]);
 %% Skip non "mmd" listeners
 process([{_,_}|Listeners], Acc) -> process(Listeners,Acc).
 
 
-get(Key,Default,PropList) ->
-    case proplists:get_value(Key,PropList) of
-        undefined -> Default;
-        Other -> Other
-    end.
 

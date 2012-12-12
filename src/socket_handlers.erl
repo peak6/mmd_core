@@ -25,7 +25,7 @@
 
 %% API
 -export([start_link/0]).
--export([createHandler/2]).
+-export([createHandler/1]).
 -export([getConnections/0]).
 -include_lib("p6core/include/logger.hrl").
 
@@ -49,8 +49,8 @@ start_link() ->
 getConnections() ->
     lists:map(fun({_,Pid,worker,_}) -> Pid end,supervisor:which_children(?SERVER)).
 
-createHandler(Socket, MaxChansPerSock) ->
-    Resp = {ok,Pid} = supervisor:start_child(?SERVER, [MaxChansPerSock]),
+createHandler(Socket) ->
+    Resp = {ok,Pid} = supervisor:start_child(?SERVER, []),
     case socket_handler:takeControl(Pid, Socket) of
         ok -> Resp;
         Other -> Other

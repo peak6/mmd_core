@@ -24,7 +24,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/1]).
+-export([start_link/0]).
 -export([takeControl/2]).
 -export([getInfo/2]).
 -export([trace/1,notrace/1]).
@@ -52,8 +52,8 @@
 %%% API
 %%%===================================================================
 
-start_link(MaxChansPerSock) ->
-    gen_server:start_link(?MODULE, [MaxChansPerSock], []).
+start_link() ->
+    gen_server:start_link(?MODULE, [], []).
 
 trace(Pid) -> call(Pid,trace).
 notrace(Pid) -> call(Pid,notrace).
@@ -70,8 +70,8 @@ call(Pid,Term) -> gen_server:call(Pid,Term).
 %%% gen_server callbacks
 %%%===================================================================
 
-init([MaxChansPerSock]) ->
-    {ok, #state{chans = channel_mgr:new(MaxChansPerSock)}}.
+init([]) ->
+    {ok, #state{chans = channel_mgr:new()}}.
 
 verifySocket(Socket) ->
     case gen_tcp:recv(Socket,0,3000) of
@@ -118,7 +118,7 @@ handle_call({take,Socket}, _From, State) ->
     SName = p6str:sock_to_str(Socket),
     case verifySocket(Socket) of
         {ok, Vsn, Impl} ->
-            inet:setopts(Socket,[{active,once},{nodelay, true}, {recbuf,128*1024*1024},{sndbuf,128*1024*1024}]),
+            inet:setopts(Socket,[{active,once}]),
             con_tracker:registerConnection(self(),socket,
                                            SName, Socket, Impl, Vsn),
             {reply, ok, State#state{socket=Socket, sockName=SName, vsn=Vsn}};
