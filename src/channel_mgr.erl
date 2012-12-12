@@ -27,12 +27,12 @@
 -record(state, {tid}).
 -define(tid(S), S#state.tid).
 
--record(chan, {id='_', remote='_', data='_', ref='_'}).
+-record(chan, {id='_', svc='_', remote='_', data='_', ref='_'}).
 
 new() -> #state{tid = ets:new(channel_mgr, [set, {keypos, 2}])}.
 chan_count(State) ->
     ets:info(?tid(State),size).
-    
+
 close_all(State,Body) ->
     ets:foldl(fun(#chan{id=Id,remote=Pid,ref=Ref},S) ->
 		      demonitor(Ref),
@@ -78,24 +78,24 @@ process_down(State,{'DOWN',_Ref,process,Pid,Reason}) ->
 			Channels)}
     end.
 
-    
+
 %% a local channel_create will spawn a channel process that will
 %% dispatch the message for us.
 process_local(State, M) -> process_local(State, M, undefined).
 process_local(State, M, Cfg) -> process_local(State, M, Cfg, undefined).
-process_local(State=#state{tid=Tid}, M=#channel_create{id=Id}, Cfg, Data) ->
+process_local(State=#state{tid=Tid}, M=#channel_create{id=Id, service=Svc}, Cfg, Data) ->
     case ets:lookup(Tid,Id) of
 	[] ->
 	    {ok,Pid} = client_channel:new(self(),M,Cfg),
 	    Ref = monitor(process,Pid),
-	    NewEntry = #chan{id = Id, remote = Pid, data = Data, ref = Ref},
+	    NewEntry = #chan{id = Id, remote = Pid, data = Data, ref = Ref, svc=Svc},
 	    true = ets:insert_new(Tid, NewEntry),
 	    {State,[]};
 	Other ->
 	    ?lerr("Client attempted to create a duplicate chanel ID\n\tMessage: ~p\n\tCurrent entry: ~p",[M,Other]),
 	    exit({error,duplicate_channel_id})
     end;
-	
+
 process_local(State, M=#channel_message{id=Id}, _Cfg, _Data) ->
     case ets:lookup(?tid(State), Id) of
         [] -> {State, noSuchChannel(Id)};
@@ -123,14 +123,14 @@ process_local_set_data(State, M=#channel_message{id=Id}, _Cfg, Data) ->
     case ets:lookup(?tid(State), Id) of
         [] -> {State, noSuchChannel(Id)};
         [Ch = #chan{remote = Pid}] -> fire(Pid,M),
-	       ets:insert(?tid(State), Ch#chan{data = Data}),
-	       {State, []}
+				      ets:insert(?tid(State), Ch#chan{data = Data}),
+				      {State, []}
     end.
 
 process_remote(State, From, M) -> process_remote(State, From, M, undefined).
-process_remote(State=#state{tid=Tid}, From, M=#channel_create{id=Id}, Data) ->
+process_remote(State=#state{tid=Tid}, From, M=#channel_create{id=Id, service=Svc}, Data) ->
     Ref = monitor(process,From),
-    Entry = #chan{id = Id, remote = From, data=Data,ref=Ref},
+    Entry = #chan{id = Id, remote = From, data=Data,ref=Ref,svc=Svc},
     case ets:insert_new(Tid,Entry) of
         true -> 
 	    {State, M};
