@@ -178,7 +178,7 @@ initChannel(Create=#create{owner=Owner,msg=CC=#channel_create{type=ChanType,id=I
 initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{type=ChanType,service=Svc,id=Id}}) ->
     Service = p6str:to_lower_bin(Svc),
     CCProper = CC#channel_create{service=Service},
-    case services:findBalanced(Service) of
+    case services:findBalanced(Service,Owner) of
         [] ->
             fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_NOT_FOUND,"Service '~p' not found.",[Svc])}),
             ?linfo("~p asked for non-existent service: ~p",[Owner,Svc]),

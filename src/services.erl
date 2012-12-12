@@ -85,11 +85,15 @@ service2Nodes() ->
 find(Name) -> filter_tags(find_unfiltered(Name)).
 find_unfiltered(Name) -> p6dmap:getWithDM(?P6DMAP,p6str:to_lower_bin(Name)).
 
-findBalanced(Name) ->
+findBalanced(Name) -> findBalanced(Name,undefined).
+findBalanced(Name,ExcludePid) ->
     case find(Name) of
         [] -> [];
+	[[_,ExcludePid|_]] -> 
+	    ?lwarn("find(~p) only found excluded pid: ~p",[Name,ExcludePid]),
+	    [];
         [A] -> [A];
-        List -> balance(List)
+        List -> balance(lists:delete(ExcludePid,List))
     end.
 
 regProxy({T,Mod},Names) when is_list(Names) ->
