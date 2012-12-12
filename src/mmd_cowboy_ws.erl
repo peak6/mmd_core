@@ -89,7 +89,6 @@ websocket_info(Down=?DOWN,Req,State=#state{chans=Chans}) ->
     ?ldebug("Chans: ~p",[Chans]),
     case channel_mgr:process_down(Chans,Down) of
 	{ok,NewChans,Messages} ->
-?ldebug("NewChans: ~p",[NewChans]),
 	    reply(Messages,Req,State),
 	    {ok,Req,State#state{chans=NewChans}};
 	{error,Other} ->
@@ -147,12 +146,8 @@ handle_call(Other,Ref,Req,State) ->
 
 process_mmd(Msg,From,Req,State=#state{chans=Chans}) ->
     case channel_mgr:process_remote(Chans,From,Msg) of
-        {NewChans,Dispatch} -> 
-?ldebug("NewChans: ~p",[NewChans]),
-reply(Dispatch,Req,State#state{chans=NewChans});
-        NewChans -> 
-?ldebug("NewChans: ~p",[NewChans]),
-reply([],Req,State#state{chans=NewChans})
+        {NewChans,Dispatch} -> reply(Dispatch,Req,State#state{chans=NewChans});
+        NewChans -> reply([],Req,State#state{chans=NewChans})
     end.
 
 process_ws(#channel_create{id=Id,service='$mmd',body=?map(Map)}, Req,State=#state{cfg=MMDCfg}) ->
@@ -162,7 +157,6 @@ process_ws(#channel_create{id=Id,service='$mmd',body=?map(Map)}, Req,State=#stat
 
 process_ws(Msg,Req,State=#state{chans=Chans,cfg=Cfg}) ->
     {NewChans,ForMe} = channel_mgr:process_local(Chans,Msg,Cfg),
-?ldebug("NewChans: ~p",[NewChans]),
     reply(ForMe,Req,State#state{chans=NewChans}).
 
 reply([], Req, State) -> {ok,Req,State,hibernate};
