@@ -78,21 +78,24 @@ process_down(State,{'DOWN',_Ref,process,Pid,Reason}) ->
 			Channels)}
     end.
 
+    
 %% a local channel_create will spawn a channel process that will
 %% dispatch the message for us.
 process_local(State, M) -> process_local(State, M, undefined).
 process_local(State, M, Cfg) -> process_local(State, M, Cfg, undefined).
 process_local(State=#state{tid=Tid}, M=#channel_create{id=Id}, Cfg, Data) ->
-    {ok,Pid} = client_channel:new(self(),M,Cfg),
-    Ref = monitor(process,Pid),
-    case ets:insert_new(Tid,
-			#chan{id = Id, remote = Pid, data = Data, ref = Ref}) of
-	true -> {State, []};
-	false ->
-	    demonitor(Ref,[flush]),
-	    {State, dupId(Id)}
+    case ets:lookup(Tid,Id) of
+	[] ->
+	    {ok,Pid} = client_channel:new(self(),M,Cfg),
+	    Ref = monitor(process,Pid),
+	    NewEntry = #chan{id = Id, remote = Pid, data = Data, ref = Ref},
+	    true = ets:insert_new(Tid, NewEntry),
+	    {State,[]};
+	Other ->
+	    ?lerr("Client attempted to create a duplicate chanel ID\n\tMessage: ~p\n\tCurrent entry: ~p",[M,Other]),
+	    exit({error,duplicate_channel_id})
     end;
-
+	
 process_local(State, M=#channel_message{id=Id}, _Cfg, _Data) ->
     case ets:lookup(?tid(State), Id) of
         [] -> {State, noSuchChannel(Id)};
@@ -125,13 +128,17 @@ process_local_set_data(State, M=#channel_message{id=Id}, _Cfg, Data) ->
     end.
 
 process_remote(State, From, M) -> process_remote(State, From, M, undefined).
-process_remote(State, From, M=#channel_create{id=Id}, Data) ->
+process_remote(State=#state{tid=Tid}, From, M=#channel_create{id=Id}, Data) ->
     Ref = monitor(process,From),
-    case ets:insert_new(?tid(State),
-			#chan{id = Id, remote = From, data=Data,ref=Ref}) of
-        true -> {State, M};
-        false -> dupId(From,Id),
-                State
+    Entry = #chan{id = Id, remote = From, data=Data,ref=Ref},
+    case ets:insert_new(Tid,Entry) of
+        true -> 
+	    {State, M};
+        false -> 
+	    demonitor(Ref,[flush]),
+	    ?lerr("Remote duplicate channel id detected\n\tIncoming message: ~p\n\tCurrent entry: ~p\n\tDuplicate entry: ~p",[M,ets:lookup(Tid,Id),Entry]),
+	    mmd_msg:error(From,M,?INVALID_CHANNEL,<<"Server detected a duplicate channel ID">>),
+	    {State,[]}
     end;
 
 process_remote(State, From, M=#channel_message{id=Id}, _Data) ->
@@ -179,8 +186,8 @@ removeRef(State, Ref) ->
     ets:match_delete(?tid(State), [#chan{remote = Ref, _ = '_'}]),
     State.
 
-dupId(From,Id) -> fire(From,dupId(Id)).
-dupId(Id) -> err(Id,?INVALID_CHANNEL,<<"Duplicate channel id detected.">>).
+%% dupId(From,Id) -> fire(From,dupId(Id)).
+%% dupId(Id) -> err(Id,?INVALID_CHANNEL,<<"Duplicate channel id detected.">>).
 
 unexpectedClose(Id) ->
     selfError(Id,?UNEXPECTED_REMOTE_CHANNEL_CLOSE,<<"Connection to the remote channel was lost.">>).
