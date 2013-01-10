@@ -119,20 +119,12 @@ send_from_cache(Flags,#cache_entry{file=File,cache_time=CacheTime,content=Bin,ty
     end.
 
 
-get_wsurl(Req,#htcfg{port=Port}) ->
-    Host =
-	case ?get(raw_host,Req) of %% Host client specified
-	    {<<>>,_} ->
-		case application:get_env(websocket_hostname) of %% config default
-		    undefined ->
-			{ok, H} = inet:gethostname(), %% Who I think I am
-			H;
-		    {ok, H} ->
-			H
-		end;
-	    {Name,_} -> Name
-	end,
-    io_lib:format("ws://~s:~p/_ws",[Host,Port]).
+get_myhost() ->
+    {ok,Name} = inet:gethostname(),
+    Name.
+
+get_wsurl(_Req,#htcfg{port=Port}) ->
+    io_lib:format("ws://~s:~p/_ws",[get_myhost(),Port]).
 
 
 not_found(Req,Cfg) ->
@@ -160,9 +152,11 @@ get_hostname(Req) ->
 get_content(Path) ->
     okget:getOrElse(file:read_file(Path),<<"">>).
 
-mk_init(Cfg=#htcfg{root=Root},Req) ->
+mk_init(Cfg=#htcfg{root=Root,port=Port},Req) ->
     [
      <<"{\n \"websocketURL\": \"">>,get_wsurl(Req,Cfg),
+     <<"\",\n \"baseURL\": \"">>,p6str:mkbin("http://~s:~p",[get_myhost(),Port]),
+     <<"\",\n \"datacenter\": \"">>,mmd:get_dc(),
      <<"\",\n \"client\": \"">>,p6str:mkbin(get_hostname(Req)),
      <<"\",\n \"environment\": \"">>,p6str:mkbin(p6init:getEnv()),
      <<"\",\n \"components\": {">>, gen_components(Cfg),
