@@ -15,6 +15,17 @@ del_tag(Tag) -> mmd_node_tags:remove(Tag).
 channels() ->
     client_channel_sup:getChannels().
 
+nodes_per_service(Svc) ->
+    lists:map(fun(N)->{N,rpc:call(N,mmd,channels_for,[Svc])} end, [node()|nodes()]).
+
+channels_for(Svc) when is_atom(Svc) -> channels_for(p6str:mkbin(Svc));
+channels_for(Svc) ->
+    lists:filter(fun(P) -> 
+			 {state,X} = client_channel:getInfo(P), 
+			 re:run(proplists:get_value(svc,X),Svc) =/= nomatch 
+		 end, 
+		 channels()).
+
 connections() ->
     lists:map(fun(C) -> {_,A} = ?DUMP_REC(con_info,C), A end, con_tracker:getConnections()).
 
@@ -27,5 +38,10 @@ join(Node) -> net_kernel:connect(Node).
 
 get_dc() -> get_dc(node()).
 get_dc(Node) -> re:replace(p6str:to_lower_bin(Node),<<"^(.*@)?...(....).*$">>,<<"\\2">>,[{return,binary}]).
+
+		 
+
+	
+
 
 %% vim: ts=4:sts=4:sw=4:et:sta:
