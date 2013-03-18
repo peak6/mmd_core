@@ -82,6 +82,10 @@
 
 -define(DOUBLE_NAN,<<16#7F,16#F8,0,0,0,0,0,0>>).
 -define(DOUBLE_INF,<<16#7F,16#F0,0,0,0,0,0,0>>).
+-define(DOUBLE_NEGINF,<<16#FF,16#F0,0,0,0,0,0,0>>).
+-define(INFINITY,'Infinity').
+-define(NEGINFINITY,'-Infinity').
+-define(NAN,'NaN').
 
 %% See protocol.txt for details of these
 %% Message Types
