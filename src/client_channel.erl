@@ -109,11 +109,10 @@ handle_info(M={mmd,From,#channel_close{}}, #state{owner=From,type=call,remote=Re
     ?lwarn("Dropping close channel to: ~p (~p) from client (~p) side of call, msg: ~p",[Svc,Remote,From,M]),
     {stop,normal,nostate};
 handle_info({mmd,From,CC=#channel_close{}}, State) ->
-    fire(resolveDest(From,logTime(From,CC,State)),CC),
+    fire(resolveDest(From,State),CC),
     {stop,normal,nostate};
 
-handle_info({mmd,From,Msg}, OState) ->
-    State = logTime(From,Msg,OState),
+handle_info({mmd,From,Msg}, State) ->
     fire(resolveDest(From,State),Msg),
     {noreply,State};
 
@@ -129,20 +128,6 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-logTime(_,_,State) -> State.
-% logTime(From,Msg,State=#state{svc=Svc,lastTime=LT,remote=Remote,id=Id}) ->
-%     Type = element(1,Msg),
-%     NT = p6time:nowAs(ms),
-%     Who = case From of
-% 	      Remote -> service;
-% 	      _ -> client
-% 	  end,
-%     case LT of
-% 	undefined -> ?linfo("Created: ~p",[Id]);
-% 	_ -> ?linfo("svc: ~p, type: ~p, from: ~p, time: ~p, chan: ~p",[Svc,Type,Who,NT-LT,Id])
-%     end,
-%     State#state{lastTime=NT}.
-    
 resolveDest(From,#state{owner=From,remote=R}) -> R;
 resolveDest(From,#state{owner=O,remote=From}) -> O;
 resolveDest(From,State) -> ?lwarn("Can't resolve: ~p -> ~p",[From,State]), error({bad_state,From,State}).
@@ -197,7 +182,7 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{type
                                     fire(Owner,#channel_message{id=Id,body= <<"$ack$">>})
                             end
                     end,
-                    {noreply,logTime(Owner,CCProper,#state{owner=Owner,remote=Pid,id=Id,type=ChanType,svc=Service})};
+                    {noreply,#state{owner=Owner,remote=Pid,id=Id,type=ChanType,svc=Service}};
                 {error,retry} -> nextTimeout(Create#create{msg=CCProper});
                 Other -> ?lwarn("Failed to create channel, reason: ~p, targets: ~p",[Other,Entries]),
                          fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_ERROR,"Service '~p' failure: ~p",[Service,Other])}),
