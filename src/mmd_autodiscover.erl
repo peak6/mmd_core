@@ -21,7 +21,6 @@
 -define(SERVER, ?MODULE).
 -define(PING_TIME,30000).  %Ping every 30 seconds
 -define(UPDATE_KNOWN,10000).
--define(RECONNECT_KNOWN,10000).
 
 -include_lib("p6core/include/p6core.hrl").
 
@@ -55,7 +54,6 @@ init([]) ->
 		    send_ping(State),
 		    timer:send_interval(?PING_TIME,send_ping),
 		    timer:send_interval(?UPDATE_KNOWN,update_known),
-		    timer:send_interval(?RECONNECT_KNOWN,reconnect_known),
 		    {ok,State};
 		{error,eaddrinuse} ->
 		    ?lwarn("Autodiscover disabled due to mcast address being in use, you are probably on a mac"),
@@ -88,10 +86,6 @@ handle_info({udp,Sock,FromIP,Port,Bin},State=#state{sock=Sock,port=Port,ignore=I
 	    end
     end;
 
-handle_info(reconnect_known,State) ->
-    reconnect_known(State),
-    {noreply,State};
-
 handle_info(update_known,State) ->
     {noreply,update_known(State)};
 
@@ -118,21 +112,6 @@ update_known(State=#state{known_nodes=Known}) ->
 		    end
 	    end, Known, nodes()),
     State#state{known_nodes=New}.
-
-reconnect_known(#state{known_nodes=Known}) ->
-    Nodes = nodes(),
-    lists:foreach(
-      fun(Node) ->
-	      case lists:member(Node,Nodes) of
-		  true -> ok;
-		  false ->
-		      case net_adm:ping(Node) of
-			  pong -> ?linfo("Reconnected to: ~p",[Node]);
-			  pang -> ok
-		      end
-	      end
-      end, Known).
-			  
 
 send_ping(#state{sock=Sock,addr=Addr,port=Port,ping=Ping}) ->
     ok = gen_udp:send(Sock,Addr,Port,term_to_binary(Ping)).
