@@ -145,7 +145,7 @@ process_remote(State, From, M=#channel_message{id=Id}, _Data) ->
     case ets:member(?tid(State), Id) of
         false ->
             ?lwarn("Unknown channel: ~p from: ~p",[Id,From]),
-            State;
+            {State,[]};
         true -> {State, M}
     end;
 process_remote(State,_From,M=#channel_close{id=Id}, _Data) ->
