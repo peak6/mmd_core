@@ -74,11 +74,13 @@ allServiceNamesUnfiltered() -> p6dmap:uniqueKeys(?P6DMAP).
 allServiceNames() ->
     lists:usort(
       lists:foldl(
-	fun([_Node,Key,Val,_Owner],Keys) ->
+	fun
+	    ([_Node,Key,#service{tags=Val,version=?SERVICE_VERSION},_Owner],Keys) ->
 		case mmd_node_tags:has(Val) of
 		    true -> [Key|Keys];
 		    false -> Keys
-		end
+		end;
+	    (_,Keys) -> Keys
 	end, 
 	[], 
 	p6dmap:all(?P6DMAP))).

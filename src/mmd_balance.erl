@@ -3,7 +3,6 @@
 
 -export([weighted_random/1]).
 -export([cheapest/1]).
-
 -define(MAX_LOAD,1000).
 
 
@@ -18,7 +17,7 @@ cheapest(Services) ->
     end.
 
 find(_Num,[]) -> undefined;
-find(Num,[{Free,Svc}|_Services]) when Free > Num -> Svc;
+find(Num,[{Free,Svc}|_Services]) when Free >= Num -> Svc;
 find(Num,[{Free,_Svc}|Services]) -> find(Num-Free,Services).
 
 min_cost([]) -> [];
