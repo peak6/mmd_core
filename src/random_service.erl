@@ -28,6 +28,8 @@ init([]) ->
     random:seed(now()),
     {ok,nostate}.
 
+handle_call({uniform,0},_From,State) ->
+    {reply,0,State};
 handle_call({uniform,Max},_From,State) ->
     {reply,random:uniform(Max),State};
 
