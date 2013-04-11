@@ -67,12 +67,15 @@ filter_opt(Bad) -> ?lwarn("Ignoring unsupported socket opt: ~p",[Bad]),
     
 
 init(ListenOpts) ->
-    {ok,LSock} = gen_tcp:listen(0,ListenOpts),
-    ?linfo("Listening on: ~s, options: ~p",[p6str:local_sock_to_str(LSock), ListenOpts]),
-    Acceptor = proc_lib:spawn_link(
-		 fun() -> accept(self(), LSock) end),
-    {ok,#state{lsock=LSock,
-	       acceptor=Acceptor}}.
+    case gen_tcp:listen(0,ListenOpts) of
+	{error,eaddrinuse} -> 
+	    ?lerr("Listen address already in use, socket connections not possible. Settings: ~p",[ListenOpts]),
+	    {ok,nostate};
+	{ok,LSock} -> 
+	    ?linfo("Listening on: ~s, options: ~p",[p6str:local_sock_to_str(LSock), ListenOpts]),
+	    Acceptor = proc_lib:spawn_link(fun() -> accept(self(), LSock) end),
+	    {ok,#state{lsock=LSock, acceptor=Acceptor}}
+    end.
 
 handle_call(Request, From, State) ->
     ?linfo("Unexpected handle_call(~p, ~p, ~p)",[Request,From,State]),

@@ -2,7 +2,6 @@
 -include_lib("p6core/include/p6core.hrl").
 -include("mmd.hrl").
 -include_lib("p6core/include/dmap.hrl").
-
 -compile([export_all]).
 
 -define(SERVER, ?MODULE).
@@ -11,6 +10,8 @@
 -define(MYTAGS,service_tags).
 
 -record(state, {known=sets:new(), chans=channel_mgr:new()}).
+
+default_tags() -> application:get_env(mmd_core,force_tags,[]).
 
 fix_tags(undefined) -> undefined;
 fix_tags(List) -> lists:usort(p6str:to_lower_list(List)).
@@ -28,21 +29,21 @@ merge_tags(List,undefined) -> List;
 merge_tags(List1,List2) -> List1++List2.
 
 
-regGlobal(Names) when is_list(Names) -> lists:foreach(fun(N)->regGlobal(N) end, Names);
-regGlobal(Name) -> regGlobal(Name,undefined).
-regGlobal(Name,Tags) -> regGlobal(self(),Name,Tags).
-regGlobal(Pid,Name,OrigTags) ->
-    Tags = get_tags(OrigTags),
-    case p6dmap:addGlobal(?P6DMAP,Pid,p6str:to_lower_bin(Name),Tags) of
-        ok -> ?linfo("Registered global: ~p (~p), tags: ~p",[Name,Pid,Tags]),
+regGlobal(S=#service{tags=undefined}) -> regGlobal(S#service{tags=default_tags()});
+regGlobal(S=#service{pid=undefined}) -> regGlobal(S#service{pid=self(),node=node()});
+regGlobal(S=#service{pid=Pid,name=Name}) ->
+    case p6dmap:addGlobal(?P6DMAP,Pid,p6str:to_lower_bin(Name),S) of
+        ok -> ?linfo("Registered global: ~p",[S]),
               ok;
-        Other -> ?linfo("Failed to register global service ~p (~p,~p) : ~p",[Name,Pid,Tags,Other]),
+        Other -> ?linfo("Failed to register global service ~p: ~p",[S,Other]),
                  Other
-    end.
+    end;
+regGlobal(Names) when is_list(Names) -> lists:foreach(fun regGlobal/1,Names);
+regGlobal(Name) -> regGlobal(#service{name=p6str:to_lower_bin(Name),pid=self(),node=node()}).
 
 regLocal(Names) when is_list(Names) -> lists:foreach(fun(Name) -> ok = regLocal(Name) end, Names);
 regLocal(Name) ->
-    case p6dmap:addLocal(?P6DMAP,self(),p6str:to_lower_bin(Name),undefined) of
+    case p6dmap:addLocal(?P6DMAP,self(),p6str:to_lower_bin(Name),#service{pid=self(),node=node(),name=Name}) of
         ok -> ?linfo("Registered local: ~p (~p)",[Name,self()]), ok;
         Other -> ?linfo("Failed to register global service ~p (~p) : ~p",[Name,self(),Other]),
                  Other
@@ -82,18 +83,14 @@ service2Nodes() ->
     dict:to_list(lists:foldl(fun([S,N],Dict) -> dict:append(S,N,Dict) end, dict:new(), p6dmap:keyToNodes(?P6DMAP))).
 
 %% Returns list of DM,Pid,Val
-find(Name) -> filter_tags(find_unfiltered(Name)).
-find_unfiltered(Name) -> p6dmap:getWithDM(?P6DMAP,p6str:to_lower_bin(Name)).
+find(Name) -> filter_tags(filter_enabled(find_unfiltered(Name))).
+find_unfiltered(Name) -> lists:map(fun([_P,S]) -> S end, p6dmap:get(?P6DMAP,p6str:to_lower_bin(Name))).
 
 findBalanced(Name) -> findBalanced(Name,undefined).
 findBalanced(Name,ExcludePid) ->
-    case find(Name) of
+    case filter_pid(ExcludePid,find(Name)) of
         [] -> [];
-	[[_,ExcludePid|_]] -> 
-	    ?lwarn("find(~p) only found excluded pid: ~p",[Name,ExcludePid]),
-	    [];
-        [A] -> [A];
-        List -> balance(lists:delete(ExcludePid,List))
+        List -> mmd_balance:weighted_random(List)
     end.
 
 regProxy({T,Mod},Names) when is_list(Names) ->
@@ -254,51 +251,21 @@ calcDiff(#state{known=Known}) ->
     All = sets:from_list(services:allServiceNames()),
     {All,sets:to_list(sets:subtract(All,Known)),sets:to_list(sets:subtract(Known,All))}.
 
-balance([A]) -> A;
-balance(List) ->
-    Items = filter_min_cost(List),
-    {Total,FreeItems} = map_free(Items),
-    Rand = random_service:uniform(Total),
-    [walk_until(Rand,FreeItems)].
 
-walk_until(_Num,[{_N,Entry}]) -> Entry;  % rand is trunc'd total, this catches us before we run short of actual load numbers
-walk_until(Num,[{N,Entry}|_Rest]) when N >= Num -> Entry;
-walk_until(Num,[{N,_Entry}|Rest]) -> walk_until(Num-N,Rest).
+filter_pid(Pid,Services) ->
+    lists:filter(fun(#service{pid=P}) when P == Pid -> false;
+		    (_) -> true
+		 end, Services).
 
-map_free(Items) ->
-    Nodes = lists:usort([ N || [N,_,_] <- Items ]),
-    Free = [ {N,100-L} || {N,L} <- cpu_load:util(Nodes) ],
-    lists:foldl(fun(Item=[N,_,_],{Sum,Acc}) ->
-			case lists:keyfind(N,1,Free) of
-			    false -> {Sum+1,[{1,Item}|Acc]};
-			    {_,Load} -> {Sum+Load,[{Load,Item}|Acc]}
-			end
-		end,
-		{0,[]},
-		Items).
+filter_enabled(Services) -> 
+    lists:filter(fun(#service{enabled=true}) -> true;
+		    (_) -> false
+		 end, Services).
 
-filter_tags(Items) ->
-    MyNode = node(),
-    lists:filter(fun
-		     ([Node,_,_]) when Node =:= MyNode -> true;
-		     ([_,_,Tags]) -> mmd_node_tags:has(Tags)
-		 end,Items).
-
-filter_min_cost(Items=[_]) -> Items; %% single item, don't bother filtering
-filter_min_cost([First=[FirstNode,_,_]|Items]) ->
-    FirstCost = mmd_node_cost:get_cost(FirstNode),
-    {_,Filtered} =
-	lists:foldl(
-	  fun(Item=[N,_,_],Cur={Cost,Acc}) ->
-		  case mmd_node_cost:get_cost(N) of
-		      C when C < Cost -> {C,[Item]};
-		      C when C > Cost -> Cur;
-		      _ -> {Cost,[Item|Acc]}
-		  end
-	  end,
-	  {FirstCost,[First]},
-	  Items),
-    Filtered.
+filter_tags(Services) -> 
+    lists:filter(fun(#service{node=Node}) when Node == node() -> true;
+		    (#service{tags=Tags}) -> mmd_node_tags:has(Tags) 
+		 end, Services).
 
 decode_pattern(Data) ->
     case mmd_decode:decode(Data) of

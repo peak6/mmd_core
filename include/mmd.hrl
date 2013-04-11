@@ -1,4 +1,7 @@
 -include_lib("p6core/include/p6core.hrl").
+
+-record(service,{node,pid,name,enabled=true,app,tags}).
+
 -define(EXIT_ERROR,1).
 -define(EXIT_RESTART,2).
 

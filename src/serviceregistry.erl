@@ -33,29 +33,37 @@ service_call(_Client,#channel_create{originator=O,body=Body}) when is_binary(Bod
     {reply,do_action(O,[{<<"name">>,Body},{<<"action">>,<<"register">>}])}.
 
 do_action(Originator, Props) ->
-    [Names,Action,Tags] = p6props:anyAndMap([
-					     {<<"name">>,fun to_lower_list/1},
-					     {<<"action">>,fun p6str:mkatom/1},
-					     {<<"tag">>,fun to_lower_list/1}
-					    ],Props),
-    case validate(Names) of
-	[] -> do_action(Action,Originator,Names,Tags);
-	Other -> ?error(?INVALID_REQUEST,p6str:mkbin(Other))
+    case p6props:anyAndMap([{<<"action">>, fun p6str:mkatom/1},
+			    {<<"name">>,fun fix_names/1}
+			   ],Props) of
+	[undefined,_] -> ?error(?INVALID_REQUEST,<<"Action must be specified">>);
+	[_,undefined] -> ?error(?INVALID_REQUEST,<<"Name (String or List of Strings) must be specified">>);
+	[_,Err=?error(_,_)] -> Err;
+	[Action,Names] -> do_action(Action,Originator,Names,Props)
     end.
 
-to_lower_list(Items) when is_list(Items) -> lists:map(fun p6str:to_lower_bin/1,Items);
-to_lower_list(Item) -> to_lower_list([Item]).
+false_or_true(false) -> false;
+false_or_true(<<"false">>) -> false;
+false_or_true(_) -> true.
 
-validate(undefined) -> {error,name_not_specified};
-validate(Names) ->
-    lists:foldl(fun
-		    (<<>>,Acc) -> [{error,empty_name}|Acc]; 
-		    (_,Acc) -> Acc
-		end, [], Names).
+fix_names(?array(Arr)) -> fix_names(Arr);
+fix_names(undefined) -> undefined;
+fix_names([]) -> undefined;
+fix_names(Bin) when is_binary(Bin) -> fix_names([Bin],[]);
+fix_names(List) when is_list(List) -> fix_names(List,[]).
 
-do_action(register, O, Names,Tags ) ->
+fix_names([], Acc) -> Acc;
+fix_names([Name|Names], Acc) ->
+    case fix_name(Name) of
+	<<>> -> ?error(?INVALID_REQUEST,<<"Name cannot be an empty string">>);
+	FixedName when is_binary(FixedName) -> fix_names(Names,[FixedName|Acc])
+    end.
+		
+fix_name(Name) when is_binary(Name) -> p6str:to_lower_bin(Name).
+		  
+do_action(register, Originator, Names, Props ) ->
     Results = lists:foldl(fun(Name,Acc) ->
-				  case services:regGlobal(O,Name,Tags) of
+				  case services:regGlobal(mkreg(Originator,Name,Props)) of
 				      ok -> Acc;
 				      Other -> [{Name,Other}|Acc]
 				  end
@@ -67,14 +75,27 @@ do_action(register, O, Names,Tags ) ->
 	Other -> ?error(?INVALID_REQUEST,Other)
     end;
 
-do_action(unregister, O, Names ,_Tags) ->
+do_action(unregister, Originator, Names ,_Props) ->
     lists:foreach(fun (Name) ->
-			  services:unregGlobal(O, p6str:to_lower_bin(Name))
+			  services:unregGlobal(Originator, p6str:to_lower_bin(Name))
 		  end, Names);
 
-do_action(_Action, _O, _Names,_Tags) ->
-    ?ldebug("Action: ~p, Originator: ~p, Names: ~p, Tags: ~p",[_Action,_O,_Names,_Tags]),
+do_action(Action, _Originator, _Names, Props) ->
+    ?ldebug("Invalid action: ~p, props: ~p",[Action,Props]),
     ?error(?INVALID_REQUEST, <<"Invalid action or invalid args for action">>).
 
+mkreg(Originator,Name,Props) ->
+    #service{pid=Originator,
+	     name=Name,
+	     node=node(Originator),
+	     app=p6str:to_lower_bin(p6props:get(<<"app">>,Props,<<"default">>)),
+	     enabled=false_or_true(p6props:get(<<"enabled">>,Props)),
+	     tags=fix_tags(p6props:get(<<"tag">>,Props))
+	    }.
+
+fix_tags(undefined) -> undefined;
+fix_tags(?array(Tags)) -> fix_tags(Tags);
+fix_tags(Tag) when is_binary(Tag) -> [p6str:to_lower_bin(Tag)];
+fix_tags(Tags) when is_list(Tags) -> p6str:to_lower_list(Tags).
 
 %% vim: ts=4:sts=4:sw=4:et:sta:

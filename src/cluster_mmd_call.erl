@@ -41,7 +41,7 @@ call(Service,Body,AuthToken,Timeout) ->
 call(Call = #call{svc=Svc}) ->
     case services:find(Svc) of
         [] -> {error,not_found};
-        Pids -> call( [Pid || [_,Pid,_] <- Pids], Call)
+        Svcs -> call( [Pid || #service{pid=Pid} <- Svcs], Call)
     end.
 
 call(Pids, Call = #call{}) ->

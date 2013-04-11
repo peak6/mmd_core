@@ -18,8 +18,7 @@
 %% API
 -export([start_link/0]).
 
--export([util/0,avg1/0,avg5/0,avg15/0]).
--export([util/1]).
+-export([util/0,util/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -37,13 +36,19 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-util() -> call(util).
-avg1() -> cpu_sup:avg1().
-avg5() -> cpu_sup:avg5().
-avg15() -> cpu_sup:avg15().
+util() -> 
+    case util(node()) of
+	{_,Util} -> Util;
+	Other -> Other
+    end.
+			
 
+util([]) -> [];
 util(Nodes) when is_list(Nodes) -> [{N,L} || [N,_,L] <- p6dmap:any(?DMAP,Nodes)];
-util(Node) -> util([Node]).
+util(Node) -> case util([Node]) of
+		  [] -> undefined;
+		  [L] -> L
+	      end.
 
 
 %%%===================================================================
@@ -51,19 +56,16 @@ util(Node) -> util([Node]).
 %%%===================================================================
 
 init([]) ->
-    p6dmap:new(?DMAP),
+    p6dmap:ensure(?DMAP),
+    p6dmap:addGlobal(?DMAP,node(),99),
     case os:type() of
 	{unix,linux}->
 	    application:start(os_mon),
-	    timer:send_interval(p6props:getApp('cpu_load.updateInterval',1000),update),
-	    {ok, genLoad()};
+	    timer:send_interval(p6props:getApp('cpu_load.updateInterval',1000),update);
 	Unknown->
-	    p6dmap:addGlobal(?DMAP,node(),99),
-	    ?lwarn("Unsupported os '~p', assuming 99% load",[Unknown]),
-	    {ok,99}
-    end.
-
-handle_call(util,_From,Load) -> {reply,Load,Load};
+	    ?lwarn("Unsupported os '~p', assuming 99% load",[Unknown])
+    end,
+    {ok,99}.
 
 handle_call(Request, From, Load) ->
     ?lwarn("Unexpected handle_call(~p, ~p, ~p)",[Request,From,Load]),
@@ -73,8 +75,8 @@ handle_cast(Msg, Load) ->
     ?lwarn("Unexpected handle_cast(~p, ~p)",[Msg,Load]),
     {noreply, Load}.
 
-handle_info(update,_) ->
-    {noreply,genLoad()};
+handle_info(update,LastLoad) ->
+    {noreply,genLoad(LastLoad)};
 
 handle_info(Info, Load) ->
     ?lwarn("Unexpected handle_info(~p, ~p)",[Info,Load]),
@@ -90,9 +92,10 @@ code_change(_OldVsn, Load, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-genLoad() ->
-    Load = cpu_sup:util(),
-    p6dmap:set(?DMAP,node(),Load),
-    Load.
-
-call(Term) -> gen_server:call(?SERVER,Term).
+genLoad(OrigLoad) ->
+    case round(cpu_sup:util() * 10) / 10 of
+	OrigLoad -> OrigLoad;
+	NewLoad -> 
+	    p6dmap:set(?DMAP,node(),NewLoad),
+	    NewLoad
+    end.

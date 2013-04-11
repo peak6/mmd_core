@@ -192,7 +192,7 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{type
 
 fire([],_Msg) ->
     {error,all_bad};
-fire([[_,Pid,_]|Pids], M)->
+fire([#service{pid=Pid}|Pids], M)->
     case fire(Pid,M) of
         {ok,SvcPid} ->
 	    {ok,SvcPid};
@@ -204,7 +204,7 @@ fire([[_,Pid,_]|Pids], M)->
 
 fire(undefined,M) -> ?lerr("Unable to send message to 'undefined': ~p",[M]),
                      {error,bad_pid};
-
+fire(#service{pid=Pid},M) -> fire(Pid,M);
 fire(Pid,Msg) when is_pid(Pid) ->
     case catch gen_server:call(Pid,{mmd,self(),Msg},?CHANNEL_DISPATCH_TIMEOUT) of
         ok -> {ok,Pid};
