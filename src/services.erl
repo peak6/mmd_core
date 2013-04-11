@@ -11,7 +11,7 @@
 
 -record(state, {known=sets:new(), chans=channel_mgr:new()}).
 
-default_tags() -> application:get_env(mmd_core,force_tags,[]).
+default_tags() -> p6props:getApp(mmd_core,force_tags,[]).
 
 fix_tags(undefined) -> undefined;
 fix_tags(List) -> lists:usort(p6str:to_lower_list(List)).
