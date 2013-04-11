@@ -29,25 +29,34 @@ merge_tags(List,undefined) -> List;
 merge_tags(List1,List2) -> List1++List2.
 
 
-regGlobal(S=#service{tags=undefined}) -> regGlobal(S#service{tags=default_tags()});
-regGlobal(S=#service{pid=undefined}) -> regGlobal(S#service{pid=self(),node=node()});
-regGlobal(S=#service{pid=Pid,name=Name}) ->
-    case p6dmap:addGlobal(?P6DMAP,Pid,p6str:to_lower_bin(Name),S) of
+normalize(S=#service{tags=undefined}) -> normalize(S#service{tags=default_tags()});
+normalize(S=#service{pid=undefined}) -> normalize(S#service{pid=self(),node=node()});
+normalize(S=#service{name=Name}) when is_atom(Name) -> normalize(S#service{name=p6str:to_lower_bin(Name)});
+normalize(S) -> S.
+
+regGlobal(Service=#service{pid=Pid}) ->
+    S = normalize(Service),
+    Name = S#service.name,
+    case p6dmap:addGlobal(?P6DMAP,Pid,Name,S) of
         ok -> ?linfo("Registered global: ~p",[S]),
               ok;
         Other -> ?linfo("Failed to register global service ~p: ~p",[S,Other]),
                  Other
     end;
 regGlobal(Names) when is_list(Names) -> lists:foreach(fun regGlobal/1,Names);
-regGlobal(Name) -> regGlobal(#service{name=p6str:to_lower_bin(Name),pid=self(),node=node()}).
+regGlobal(Name) -> regGlobal(#service{name=Name,pid=self(),node=node()}).
 
-regLocal(Names) when is_list(Names) -> lists:foreach(fun(Name) -> ok = regLocal(Name) end, Names);
-regLocal(Name) ->
-    case p6dmap:addLocal(?P6DMAP,self(),p6str:to_lower_bin(Name),#service{pid=self(),node=node(),name=Name}) of
-        ok -> ?linfo("Registered local: ~p (~p)",[Name,self()]), ok;
-        Other -> ?linfo("Failed to register global service ~p (~p) : ~p",[Name,self(),Other]),
+regLocal(Service=#service{pid=Pid}) ->
+    S = normalize(Service),
+    Name = S#service.name,
+    case p6dmap:addLocal(?P6DMAP,Pid,Name,S) of
+        ok -> ?linfo("Registered local: ~p (~p)",[Name,Pid]), ok;
+        Other -> ?linfo("Failed to register global service ~p (~p) : ~p",[Name,Pid,Other]),
                  Other
-    end.
+    end;
+    
+regLocal(Names) when is_list(Names) -> lists:foreach(fun(Name) -> ok = regLocal(Name) end, Names);
+regLocal(Name) -> regLocal(#service{name=Name,pid=self(),node=node()}).
 
 unregGlobal(Pid, Name) ->
     case p6dmap:delGlobal(?P6DMAP, Pid, p6str:to_lower_bin(Name)) of
