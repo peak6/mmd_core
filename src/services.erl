@@ -51,7 +51,7 @@ regLocal(Service=#service{pid=Pid}) ->
     Name = S#service.name,
     case p6dmap:addLocal(?P6DMAP,Pid,Name,S) of
         ok -> ?linfo("Registered local: ~p (~p)",[Name,Pid]), ok;
-        Other -> ?linfo("Failed to register global service ~p (~p) : ~p",[Name,Pid,Other]),
+        Other -> ?linfo("Failed to register local service ~p (~p) : ~p",[Name,Pid,Other]),
                  Other
     end;
     
@@ -93,7 +93,9 @@ service2Nodes() ->
 
 %% Returns list of DM,Pid,Val
 find(Name) -> filter_tags(filter_enabled(find_unfiltered(Name))).
-find_unfiltered(Name) -> lists:map(fun([_P,S]) -> S end, p6dmap:get(?P6DMAP,p6str:to_lower_bin(Name))).
+find_unfiltered(Name) -> 
+    [ S || [_P,S=#service{version=?SERVICE_VERSION}] <- p6dmap:get(?P6DMAP,p6str:to_lower_bin(Name)) ].
+%%    lists:map(fun([_P,S=#service{version=?SERVICE_VERSION}]) -> S end, p6dmap:get(?P6DMAP,p6str:to_lower_bin(Name))).
 
 findBalanced(Name) -> findBalanced(Name,undefined).
 findBalanced(Name,ExcludePid) ->
