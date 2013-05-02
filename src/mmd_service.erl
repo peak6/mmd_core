@@ -122,7 +122,8 @@ handle_call({mmd,_From,CM=#channel_message{}},Ref,State=#state{mod=Mod,mod_state
 
 handle_call({mmd,_From,CC=#channel_close{}},Ref,State=#state{mod=Mod,mod_state=ModState}) ->
     gen_server:reply(Ref,ok),
-    process_result(State,Mod:service_close(?df(CC),ModState));
+    catch Mod:service_close(?df(CC),ModState),
+    {stop,normal,State};
 
 handle_call(Msg,Ref,State) ->
     ?lwarn("Unexpected handle_call(~p, ~p, ~p)",[Msg,Ref,?DUMP_REC(state,State)]),
@@ -141,7 +142,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% For modules that have no internal state
 process_result(State=#state{client=Client,id=Id},{reply,Body}) ->
     mmd_msg:reply(Client,Id,Body),
-    {noreply,State#state{mod_state=no_state}};
+    {noreply,State};
 
 %% Reply to client and set new module state
 process_result(State=#state{client=Client,id=Id},{reply,Body,NewState}) ->
