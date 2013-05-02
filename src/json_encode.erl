@@ -52,6 +52,7 @@ encode_obj(?array(Arr)) -> lists:map(fun(V) -> encode_obj(V) end, Arr);
 encode_obj(?raw(Data)) -> encode_obj(mmd_decode:decodeRawFull(Data));
 encode_obj(?secid(Id)) -> security_id:get_key(Id);
 encode_obj(?bytes(Bin)) -> encode_obj(mmd_decode:decodeFull(Bin));
+encode_obj(Pid) when is_pid(Pid) -> p6str:mkbin(Pid);
 encode_obj(T) when is_tuple(T) -> encode_obj(tuple_to_list(T));
 encode_obj(List) when is_list(List) -> lists:map(fun(X) -> encode_obj(X) end, List);
 encode_obj(Val) -> Val.

@@ -59,6 +59,8 @@ encode_obj(undefined) -> [?NULL];
 encode_obj(null) -> [?NULL];
 encode_obj(nil) -> [?NULL];
 %% inferred types
+encode_obj(Obj) when is_pid(Obj) ->
+    encode_obj(p6str:mkbin(Obj));
 encode_obj(Obj) when is_integer(Obj), Obj < 0 ->
     [?SVARINT64,encode_type(svarint64,Obj)];
 encode_obj(Obj) when is_integer(Obj) ->
