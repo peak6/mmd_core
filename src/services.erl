@@ -5,16 +5,11 @@
 -compile([export_all]).
 
 -define(SERVER, ?MODULE).
--define(WATCHERS,service_watchers).
 -define(P6DMAP,service_map).
--define(MYTAGS,service_tags).
 
 -record(state, {known=sets:new(), chans=channel_mgr:new()}).
 
 default_tags() -> p6props:getApp(mmd_core,force_tags,[]).
-
-fix_tags(undefined) -> undefined;
-fix_tags(List) -> lists:usort(p6str:to_lower_list(List)).
 
 get_tags(Tags) ->
     Ret = case application:get_env(mmd_core,force_tags) of
@@ -22,6 +17,9 @@ get_tags(Tags) ->
 	      _ -> Tags
 	  end,
     fix_tags(Ret).
+
+fix_tags(undefined) -> undefined;
+fix_tags(List) -> lists:usort(p6str:to_lower_list(List)).
 
 merge_tags(undefined,undefined) -> undefined;
 merge_tags(undefined,List) -> List;
@@ -32,7 +30,7 @@ merge_tags(List1,List2) -> List1++List2.
 normalize(S=#service{tags=undefined}) -> normalize(S#service{tags=default_tags()});
 normalize(S=#service{pid=undefined}) -> normalize(S#service{pid=self(),node=node()});
 normalize(S=#service{name=Name}) when is_atom(Name) -> normalize(S#service{name=p6str:to_lower_bin(Name)});
-normalize(S) -> S.
+normalize(S=#service{tags=Tags}) -> S#service{tags=fix_tags(Tags)}.
 
 regGlobal(Service=#service{pid=Pid}) ->
     S = normalize(Service),
@@ -167,7 +165,7 @@ handle_call({mmd, From, CC=#channel_create{type=call,body=SvcPattern}}, _From, S
 	    mmd_msg:error(From, CC, ?INVALID_REQUEST,
 			  "Error, bad request: ~p",[Reason]);
 	{ok,Str} ->
-	    case re:compile(Str) of
+	    case re:compile(Str,[caseless]) of
 		{ok, MP} ->
 		    Ret = lists:foldl(fun(Svc,Acc) ->
 					      SB = p6str:mkbin(Svc),
