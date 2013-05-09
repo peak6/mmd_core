@@ -26,7 +26,7 @@
 -type body() :: {mmd_raw,binary()} | term().
 
 %% Channel messages
--record(channel_create,{id=uuid:srandom() :: channelId(),
+-record(channel_create,{id=p6uuid:next() :: channelId(),
                         originator=self() :: pid(),
                         service :: serviceName(),
                         type :: createType(),
