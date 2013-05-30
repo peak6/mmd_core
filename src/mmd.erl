@@ -39,6 +39,13 @@ join(Node) -> net_kernel:connect(Node).
 get_dc() -> get_dc(node()).
 get_dc(Node) -> re:replace(p6str:to_lower_bin(Node),<<"^(.*@)?...(....).*$">>,<<"\\2">>,[{return,binary}]).
 
+version()->
+    application:load(mmd_core), % load app in case being called from script
+    case application:get_key(mmd_core,vsn) of
+	{ok, Version}->Version;
+	_ -> undefined
+    end.
+	
 		 
 
 	
