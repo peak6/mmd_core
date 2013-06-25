@@ -179,7 +179,10 @@ ws_reply(Msg,Req,State=#state{type=Type}) ->
 
 
 encode(Msg,binary) -> mmd_encode:encode(Msg);
-encode(Msg,text) -> okget:ok(json_encode:encode(Msg)).
+encode(Msg,text) -> 
+    {ExecTime, EncodeResult} = timer:tc(json_encode, encode, [Msg]),
+    ?ldebug("JSON Encode: ~B~n", [ExecTime]),  
+    okget:ok(EncodeResult).
 
 
 xhr_reply(Msgs,Req,State=#state{xhr_cache=Cache,xhr_ref=undefined}) ->

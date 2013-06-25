@@ -42,7 +42,9 @@ handle(OrigReq,Cfg) ->
                         {ok,?error(Code,Text)} ->
 			    reply(500,[],p6str:mkio("Error Code: ~p\nError Message: ~s",[Code,p6str:mkstr(Text)]),Req,Cfg);
                         {ok,Result} ->
-                            case json_encode:encode(Result) of
+                            {ExecTime, EncodeResult} = timer:tc(json_encode, encode, [Result]),
+                            ?ldebug("JSON Encode: ~B~n~s~n", [ExecTime, EncodeResult]),
+                            case EncodeResult of
                                 {ok,JSON} -> reply(200,[{<<"Content-Type">>,mimetypes:extension("json")}],JSON,Req,Cfg);
 				Other -> reply(500,[],p6str:mkio("Failed to encode response: ~p",[Other]),Req,Cfg)
                             end;
