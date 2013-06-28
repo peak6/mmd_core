@@ -29,12 +29,8 @@ decodeObj(JS) ->
 
 decode({json,Json}) -> decode(Json);
 decode(Json) ->
-    ?ldebug("json: ~p~n", [Json]),
     {ok,Obj,[]} = json:decode(Json),
-    ?ldebug("obj: ~p~n", [Obj]),
-    DecodeObj = decodeDoc(Obj),
-    ?ldebug("decodeobj: ~p~n", [DecodeObj]),
-    DecodeObj.
+    catch decodeDoc(Obj).
 
 decodeDoc({obj,Map}) ->
     case p6props:first(["call","sub","close","msg"],Map) of
