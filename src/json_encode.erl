@@ -13,15 +13,14 @@
 %% limitations under the License.
 -module(json_encode).
 
--export([encode/1, encode_obj/1, fast_encode/1]).
+-export([encode/1]).
 -include("mmd.hrl").
 -include_lib("p6core/include/logger.hrl").
 
 encode(?raw(Bin)) -> encode(mmd_decode:decodeRawFull(Bin));
 
 encode(Data) ->
-    {ObjEncodeTime, ObjEncodeResult} = timer:tc(json_encode, encode_obj, [Data]),
-    ?ldebug("ObjEncode: ~B~n", [ObjEncodeTime]),
+    ObjEncodeResult = encode_obj(Data),
 
     case extractJson(ObjEncodeResult) of
         nojson -> {ok, json:encode(ObjEncodeResult)};

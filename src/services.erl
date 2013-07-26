@@ -286,6 +286,14 @@ decode_pattern(Data) ->
 	undefined -> {ok,<<>>};
 	Other -> {error,Other}
     end.
+
+enable_service(ServiceName, Enabled) ->    
+    ServiceRecs= p6dmap:getForNode(service_map,node(),p6str:to_lower_bin(ServiceName)),
+    lists:foreach(fun([Reg=#service{pid=Owner,name=Name}])->
+			  p6dmap:set(service_map,Owner,Name,Reg#service{enabled=Enabled}),
+			  ?linfo("Setting ~p for: ~p",[Enabled, Reg])
+		  end,
+		  ServiceRecs).
 	    
 
 %% vim: ts=4:sts=4:sw=4:et:sta:
