@@ -24,16 +24,15 @@ encode(Data) ->
 
     case extractJson(ObjEncodeResult) of
         nojson -> {ok, json:encode(ObjEncodeResult)};
-        Json when is_binary(Json) -> {ok, Json};
-        _ -> error
+        Json -> {ok, Json} 
     end.
 
 extractJson({obj, DataMap}) -> 
     extractJson(p6props:all([msg,body],DataMap));
-extractJson({ok, [Msg, {obj, BodyMap}]}) ->
+extractJson({ok, [ChanId, {obj, BodyMap}]}) ->
     case p6props:get(<<"json">>,BodyMap) of 
         Json when is_binary(Json) ->
-            fast_encode([{msg, Msg}, {body, Json}]);
+            fast_encode([{msg, ChanId}, {body, Json}]);
         undefined -> nojson
     end;
 extractJson(_Foo) -> 
@@ -41,26 +40,23 @@ extractJson(_Foo) ->
 
 fast_encode(V) ->
 	JoinResult = join(V, <<",">>),
-	<<"{",JoinResult/binary,"}">>.
+	[${,JoinResult,$}].
 
 join([X|Xs], Sep) -> join1(X, Sep, Xs).
 join1(X, Sep, [Y|Ys]) ->
     JoinResult = join1(Y, Sep, Ys),
     EncodeResult = fast_encode_tuple(X),
-    <<EncodeResult/binary, Sep/binary, JoinResult/binary>>;
+    [EncodeResult, Sep, JoinResult];
 join1(X, _, []) ->
     fast_encode_tuple(X).
 
 fast_encode_tuple({K, V}) ->
-    BinaryAtom = atom_to_binary(K, utf8),
-    BinaryVal = val_to_binary(K, V),
-    Bin0 = <<"\"">>,
-    Bin1 = <<Bin0/binary,BinaryAtom/binary>>,
-    Bin2 = <<Bin1/binary,"\":">>,
-    <<Bin2/binary,BinaryVal/binary>>.
+    Key = p6str:mkbin(K),
+    Value = quote_chanid(K, V),
+    [$", Key, $", $:, Value].
 
-val_to_binary(msg, Val) -> <<"\"", Val/binary, "\"">>;
-val_to_binary(_, Val) -> <<Val/binary>>.
+quote_chanid(msg, Val) -> [$", p6str:mkbin(Val), $"];
+quote_chanid(_, Val) -> p6str:mkbin(Val).
 
 uuidToStr(?uuid(UUID)) -> uuidToStr(UUID);
 uuidToStr(?secid(SECID)) -> uuidToStr(SECID);
