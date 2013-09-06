@@ -14,7 +14,9 @@ flags() ->
 
 
 has(_,<<>>) -> false;  %% No flags set
-has(raw,Flags) -> contains(<<".raw.">>,Flags);
+%has(raw,Flags) -> contains(<<".raw.">>,Flags);
+% always want to send raw for now. this is the simplest way
+has(raw,_Flags) -> true;
 has(always,Flags) -> contains(<<".always.">>,Flags);
 has(trace,Flags) -> contains(<<".trace.">>,Flags);
 has(Other,Flags) -> ?lwarn("Checked for unknown flag: ~p, in cookie: ~s",[Other,Flags]),

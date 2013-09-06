@@ -20,10 +20,43 @@
 encode(?raw(Bin)) -> encode(mmd_decode:decodeRawFull(Bin));
 
 encode(Data) ->
-    Obj = encode_obj(Data),
-    {ok,json:encode(Obj)}.
+    ObjEncodeResult = encode_obj(Data),
 
+    case extractJson(ObjEncodeResult) of
+        nojson -> {ok, json:encode(ObjEncodeResult)};
+        Json -> {ok, Json} 
+    end.
 
+extractJson({obj, DataMap}) -> 
+    extractJson(p6props:all([msg,body],DataMap));
+extractJson({ok, [ChanId, {obj, BodyMap}]}) ->
+    case p6props:get(<<"json">>,BodyMap) of 
+        Json when is_binary(Json) ->
+            fast_encode([{msg, ChanId}, {body, Json}]);
+        undefined -> nojson
+    end;
+extractJson(_Foo) -> 
+    nojson.
+
+fast_encode(V) ->
+	JoinResult = join(V, <<",">>),
+	[${,JoinResult,$}].
+
+join([X|Xs], Sep) -> join1(X, Sep, Xs).
+join1(X, Sep, [Y|Ys]) ->
+    JoinResult = join1(Y, Sep, Ys),
+    EncodeResult = fast_encode_tuple(X),
+    [EncodeResult, Sep, JoinResult];
+join1(X, _, []) ->
+    fast_encode_tuple(X).
+
+fast_encode_tuple({K, V}) ->
+    Key = p6str:mkbin(K),
+    Value = quote_chanid(K, V),
+    [$", Key, $", $:, Value].
+
+quote_chanid(msg, Val) -> [$", p6str:mkbin(Val), $"];
+quote_chanid(_, Val) -> p6str:mkbin(Val).
 
 uuidToStr(?uuid(UUID)) -> uuidToStr(UUID);
 uuidToStr(?secid(SECID)) -> uuidToStr(SECID);
