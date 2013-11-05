@@ -11,6 +11,14 @@ add_tag(Tag) -> mmd_node_tags:add(Tag).
 get_tags() -> mmd_node_tags:get().
 del_tag(Tag) -> mmd_node_tags:remove(Tag).
 
+tag_string() ->
+    string:join(lists:map(fun(T) -> binary_to_list(T) end, get_tags()),",").
+
+force_tag_string() ->
+    case application:get_env(mmd_core,force_tags) of
+	undefined -> "";
+	{ok,List} -> string:join(lists:map(fun(A) -> atom_to_list(A) end, List), ",")
+    end.
 
 channels() ->
     client_channel_sup:getChannels().
