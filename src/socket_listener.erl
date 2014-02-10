@@ -70,7 +70,7 @@ init(ListenOpts) ->
     case gen_tcp:listen(0,ListenOpts) of
 	{error,eaddrinuse} -> 
 	    ?lerr("Listen address already in use, socket connections not possible. Settings: ~p",[ListenOpts]),
-	    {ok,nostate};
+	    {stop,eaddrinuse};
 	{ok,LSock} -> 
 	    ?linfo("Listening on: ~s, options: ~p",[p6str:local_sock_to_str(LSock), ListenOpts]),
 	    Acceptor = proc_lib:spawn_link(fun() -> accept(self(), LSock) end),
