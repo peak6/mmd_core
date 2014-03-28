@@ -16,47 +16,16 @@
 -export([encode/1]).
 -include("mmd.hrl").
 -include_lib("p6core/include/logger.hrl").
+-define( QUOTE, $" ).
 
 encode(?raw(Bin)) -> encode(mmd_decode:decodeRawFull(Bin));
 
-encode(Data) ->
-    ObjEncodeResult = encode_obj(Data),
+encode(CM=#channel_message{body=?raw(Data)}) -> encode(CM#channel_message{body=mmd_decode:decodeRawFull(Data)});
+    
+encode(#channel_message{id=Id,body=?map([{<<"json">>,JSON}])}) when is_binary(JSON) ->
+    {ok,[${,<<"\"msg\"">>,$:,?QUOTE,uuidToStr(Id),?QUOTE,$,,<<"\"body\"">>,$:,JSON,$}]};
 
-    case extractJson(ObjEncodeResult) of
-        nojson -> {ok, json:encode(ObjEncodeResult)};
-        Json -> {ok, Json} 
-    end.
-
-extractJson({obj, DataMap}) -> 
-    extractJson(p6props:all([msg,body],DataMap));
-extractJson({ok, [ChanId, {obj, BodyMap}]}) ->
-    case p6props:get(<<"json">>,BodyMap) of 
-        Json when is_binary(Json) ->
-            fast_encode([{msg, ChanId}, {body, Json}]);
-        undefined -> nojson
-    end;
-extractJson(_Foo) -> 
-    nojson.
-
-fast_encode(V) ->
-	JoinResult = join(V, <<",">>),
-	[${,JoinResult,$}].
-
-join([X|Xs], Sep) -> join1(X, Sep, Xs).
-join1(X, Sep, [Y|Ys]) ->
-    JoinResult = join1(Y, Sep, Ys),
-    EncodeResult = fast_encode_tuple(X),
-    [EncodeResult, Sep, JoinResult];
-join1(X, _, []) ->
-    fast_encode_tuple(X).
-
-fast_encode_tuple({K, V}) ->
-    Key = p6str:mkbin(K),
-    Value = quote_chanid(K, V),
-    [$", Key, $", $:, Value].
-
-quote_chanid(msg, Val) -> [$", p6str:mkbin(Val), $"];
-quote_chanid(_, Val) -> p6str:mkbin(Val).
+encode(Data) -> {ok,json:encode(encode_obj(Data))}.
 
 uuidToStr(?uuid(UUID)) -> uuidToStr(UUID);
 uuidToStr(?secid(SECID)) -> uuidToStr(SECID);

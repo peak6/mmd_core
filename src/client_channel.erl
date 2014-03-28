@@ -139,7 +139,7 @@ resolveDest(From,State) -> ?lwarn("Can't resolve: ~p -> ~p",[From,State]), error
 nextTimeout(Create=#create{owner=Owner,createTime=CT,remote=RPid,msg=#channel_create{service=Svc,id=Id,timeout=Timeout}}) ->
     case p6time:timeLeft(ms,CT+Timeout) of
         N when N < 100 ->
-            fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_BUSY,"Service '~p' registered, but busy.",[Svc])}),
+            fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_BUSY,"Service '~s' registered, but busy.",[Svc])}),
             ?lwarn("Timeout waiting for service ~p/~p to be avaliable",[Svc,RPid]),
             {stop,normal,nostate};
         _N ->
@@ -165,7 +165,7 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{type
     CCProper = CC#channel_create{service=Service},
     case services:findBalanced(Service,Owner) of
         [] ->
-            fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_NOT_FOUND,"Service '~p' not found.",[Svc])}),
+            fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_NOT_FOUND,"Service '~s' not found.",[Svc])}),
             ?linfo("~p asked for non-existent service: ~p",[Owner,Svc]),
             {stop,normal,nostate};
         Entries ->
@@ -185,7 +185,7 @@ initChannel(Create=#create{mmdCfg=MMDCfg,owner=Owner,msg=CC=#channel_create{type
                     {noreply,#state{owner=Owner,remote=Pid,id=Id,type=ChanType,svc=Service}};
                 {error,retry} -> nextTimeout(Create#create{msg=CCProper});
                 Other -> ?lwarn("Failed to create channel, reason: ~p, targets: ~p",[Other,Entries]),
-                         fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_ERROR,"Service '~p' failure: ~p",[Service,Other])}),
+                         fire(Owner,#channel_close{id=Id,body=?error(?SERVICE_ERROR,"Service '~s' failure: ~p",[Service,Other])}),
                          {stop,normal,nostate}
             end
     end.
