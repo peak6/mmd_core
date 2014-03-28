@@ -181,8 +181,7 @@ handle_call({mmd, From, CC=#channel_create{type=call,body=SvcPattern}}, _From, S
 		    mmd_msg:error(From, CC, ?INVALID_REQUEST,
 				  "Failed to compile regex: reason: ~p, "
 				  "pos: ~p, regex: ~p", [ErrString, Pos, SvcPattern])
-	    end,
-	    timer:sleep(4000)
+	    end
     end,
     {reply,ok,State};
 

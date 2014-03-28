@@ -11,7 +11,6 @@
 
 service_subscribe(_Client,#channel_create{}) -> ok.
 service_call(_Client,#channel_create{body=undefined}) ->
-    ?lerr("Using blank services service"),
     {reply,services:allServiceNames()};
 service_call(_Client,#channel_create{body=SvcPattern}) ->
     ?ldebug("Using services service"),
@@ -24,7 +23,6 @@ service_call(_Client,#channel_create{body=SvcPattern}) ->
 		      end,
 		      [],
 		      services:allServiceNames()),
-    timer:sleep(10000),
     {reply,Ret}.
 
 service_message(#channel_message{},_State) -> ok.
