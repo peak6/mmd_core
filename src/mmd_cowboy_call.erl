@@ -7,13 +7,18 @@
 init({_Proto,http}, Req, Cfg) ->
     {ok,Req,Cfg}.
 
-%attrs(Items,Req) -> lists:foldr(fun(I,{Acc,Req}) -> {V,R} = cowboy_http_req:I(Req), { [V|Acc], R } end, {[],Req, Items).
-
 handle(OrigReq,Cfg) ->
-%%    ?trace(Cfg,"Request: ~p",[?DUMP_REC(http_req,OrigReq)]),
+    %%    ?trace(Cfg,"Request: ~p",[?DUMP_REC(http_req,OrigReq)]),
     {Props,Req} = cowboy_http_req:qs_vals(OrigReq),
     {PathInfo,_} = cowboy_http_req:path_info(Req),
-    Svc = p6str:to_lower_bin(filename:join(PathInfo)),
+    ?ldebug("PI: ~p",[PathInfo]),
+    case PathInfo of 
+	[Svc] -> handle(p6str:to_lower_bin(Svc),<<"application/json">>,Props,Req,Cfg);
+	[Svc,File] -> handle(p6str:to_lower_bin(Svc),mimetypes:filename(File),Props,Req,Cfg);
+	_ -> reply(404,[],"Bad request, must supply only a service and optionally a file name.  Example: /call/foo/bar.json",Req,Cfg)
+    end.
+
+handle(Svc,MimeType,Props,Req,Cfg) ->
     CC = mkCreateChannel(Svc,Props),
     case p6props:has(<<"debug">>,Props) of
         true ->
@@ -30,7 +35,7 @@ handle(OrigReq,Cfg) ->
 			   "Using Args: ~p\n"
 			   "Service: ~p\n"
 			   "ChannelCreate: ~p"
-			   ,[Path,Args,Props,Svc,CCStr]),Req,Cfg);
+				   ,[Path,Args,Props,Svc,CCStr]),Req,Cfg);
         false ->
             case CC of
                 #channel_create{} ->
@@ -43,7 +48,7 @@ handle(OrigReq,Cfg) ->
 			    reply(500,[],p6str:mkio("Error Code: ~p\nError Message: ~s",[Code,p6str:mkstr(Text)]),Req,Cfg);
                         {ok,Result} ->
                             case json_encode:encode(Result) of
-                                {ok,JSON} -> reply(200,[{<<"Content-Type">>,mimetypes:extension("json")}],JSON,Req,Cfg);
+                                {ok,JSON} -> reply(200,[{<<"Content-Type">>,MimeType}],JSON,Req,Cfg);
 				Other -> reply(500,[],p6str:mkio("Failed to encode response: ~p",[Other]),Req,Cfg)
                             end;
                         {error,timeout} -> reply(408,[],"Timeout",Req,Cfg);
