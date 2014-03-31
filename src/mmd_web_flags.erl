@@ -13,14 +13,15 @@ flags() ->
     ].
 
 
-has(_,<<>>) -> false;  %% No flags set
-has(raw,Flags) -> contains(<<".raw.">>,Flags);
+
+has(raw,Flags) -> true;
 has(always,Flags) -> contains(<<".always.">>,Flags);
 has(trace,Flags) -> contains(<<".trace.">>,Flags);
 has(Other,Flags) -> ?lwarn("Checked for unknown flag: ~p, in cookie: ~s",[Other,Flags]),
                     false.
 
 
+contains(LookFor,<<>>) -> false;
 contains(LookFor,In) -> binary:match(In,LookFor) =/= nomatch.
 
 init({_Proto,http}, Req, Cfg) ->
