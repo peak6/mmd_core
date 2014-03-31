@@ -7,15 +7,11 @@
 
 flags() ->
     [
-     {raw,<<"Send direct from file system.  Doesn't minify. Ignores timestamps and cache entries">>},
-     {always,<<"Always send file, ignore timestamp">>},
      {trace,<<"Enabled verbose MMD logging for this client">>}
     ].
 
 
 
-has(raw,_Flags) -> true;
-has(always,Flags) -> contains(<<".always.">>,Flags);
 has(trace,Flags) -> contains(<<".trace.">>,Flags);
 has(Other,Flags) -> ?lwarn("Checked for unknown flag: ~p, in cookie: ~s",[Other,Flags]),
                     false.

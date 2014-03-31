@@ -74,18 +74,8 @@ send_file(RawPath,Req,Cfg=#htcfg{root=Root}) ->
     end.
 
 maybe_send(File,Req,Cfg) ->
-						% File = p6file:join(Root,RawPath),
     {Flags,_} = cowboy_http_req:cookie(<<"mmd">>,Req,<<>>),
-    case mmd_web_flags:has(raw,Flags) of
-        true ->
-            send_from_fs(Flags,File,Req,Cfg);
-        false ->
-            case mmd_web_cache:get_file(File) of
-                {ok,Entry=#cache_entry{}} -> send_from_cache(Flags,Entry,Req,Cfg);
-                {miss,_Entry} -> send_from_fs(Flags,File,Req,Cfg);
-                Other -> handle_error(Other,Req,Cfg)
-            end
-    end.
+    send_from_fs(Flags,File,Req,Cfg).
 
 
 
@@ -100,24 +90,6 @@ send_from_fs(Flags,File,Req,Cfg) ->
                           Cfg);
         Other -> handle_error(Other,Req,Cfg)
     end.
-
-send_from_cache(Flags,#cache_entry{file=File,cache_time=CacheTime,content=Bin,type=Type},Req,Cfg) ->
-    case mmd_web_flags:has(always,Flags) of
-        true -> reply(200,[{<<"Content-Type">>,Type}],Bin,Req,Cfg);
-        false ->
-            case ?hdr('If-Modified-Since',Req) of
-                {CacheTime,_} ->
-                    ?trc(Flags,"Not modified, sending 304: ~p",[File]),
-                    reply(304,[],<<>>,Req,Cfg);
-                {Other,_} ->
-                    ?trc(Flags,"Sending update: ~p, server time: ~p, browser time: ~p",[File,CacheTime,Other]),
-                    reply(200,[
-                               {<<"Content-Type">>,Type},
-                               {<<"Last-Modified">>,CacheTime}
-                              ],Bin,Req,Cfg)
-            end
-    end.
-
 
 get_myhost() ->
     {ok,Name} = inet:gethostname(),

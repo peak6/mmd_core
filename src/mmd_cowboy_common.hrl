@@ -2,7 +2,6 @@
 -include("mmd.hrl").
 %%-include("mmd_http.hrl").
 -include_lib("cowboy/include/http.hrl").
--include("mmd_web_cache.hrl").
 -include("mmd_cfg.hrl").
 
 -record(htcfg,{port,root,trace=false,proxy,mmdCfg=#mmd_cfg{}}).

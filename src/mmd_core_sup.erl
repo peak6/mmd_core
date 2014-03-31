@@ -67,7 +67,7 @@ init([]) ->
     
     Http = case application:get_env(http_port) of
                undefined -> [];
-               {ok,Port} -> [?CHILD(mmd_web_cache,[],worker),?CHILD(mmd_cowboy_listener,[Port],worker)]
+               {ok,Port} -> [?CHILD(mmd_cowboy_listener,[Port],worker)]
            end,
     MmdTcpClientSpecs = case application:get_env(mmd_tcp_clients) of
 			    undefined ->
