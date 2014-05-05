@@ -4,10 +4,10 @@
 
 
 decode(JSON) ->
-    rfc4627:decode_noauto(JSON).
+    rfc4627:decode(JSON).
 
 encode(Obj) ->
-    rfc4627:encode_noauto(Obj).
+    rfc4627:encode(Obj).
 
 
 
