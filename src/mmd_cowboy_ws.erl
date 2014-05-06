@@ -6,7 +6,7 @@
 	 websocket_info/3, websocket_terminate/3]).
 
 -include("mmd_cowboy_common.hrl").
--record(state,{chans=channel_mgr:new(),trace=true,cfg=#mmd_cfg{},xhr=false,xhr_cache,xhr_ref,type=binary}).
+-record(state,{chans=channel_mgr:new(),trace=true,cfg=#mmd_cfg{},type=binary}).
 
 -define(DOWN,{'DOWN',_Ref,process,_Pid,_Reason}).
 
@@ -42,17 +42,6 @@ is_set(_Other) -> false.
 
 websocket_init(_Any, OReq, #htcfg{trace=Trace}) ->
     {Props,Req} = cowboy_http_req:qs_vals(OReq),
-    case is_set(p6props:get(<<"xhr">>,Props)) of
-	true ->
-	    UUID = p6str:mkbin(uuid:to_string(p6uuid:next())),
-	    p6dmap:addLocal(?XHR_DMAP,UUID,self()),
-	    self() ! {initXHR,UUID},
-	    XHRCache = [],
-	    XHR=true;
-	false ->
-	    XHRCache = undefined,
-	    XHR=false
-    end,
     RespType = case is_set(p6props:get(<<"binary">>,Props)) of
 		   false -> text;
 		   true -> binary
@@ -61,7 +50,7 @@ websocket_init(_Any, OReq, #htcfg{trace=Trace}) ->
     {Peer,_} = ?get(peer,Req),
     con_tracker:registerConnection(self(),websocket,format_addr(Peer),Socket,<<"websocket">>, json),
     Req2 = cowboy_http_req:compact(Req),
-    {ok, Req2, #state{xhr=XHR,type=RespType,trace=Trace,xhr_cache=XHRCache}, hibernate}.
+    {ok, Req2, #state{type=RespType,trace=Trace}, hibernate}.
 
 websocket_handle({text, Data}, Req, State) ->
     ?trc(State,"Received(~p): ~p",[size(Data),Data]),
@@ -99,9 +88,6 @@ websocket_info({dispatch,Message},Req,State) ->
     ws_reply(Message,Req,State); %% {dispatch,Msg} messages are only used with websockets
 
 
-websocket_info({initXHR,ID},Req,State) ->
-    {reply,{text,ID},Req,State,hibernate};
-
 %% Catch all to avoid blowing up socket
 websocket_info(_Info, Req, State) ->
     ?lerr("Unexepected message: ~p",[_Info]),
@@ -128,17 +114,6 @@ handle_call(socket,Ref,Req,State) ->
     {ok,_Transport,Socket} = ?get(transport,Req),
     ?gsreply(Ref,Socket),
     {ok,Req,State};
-handle_call(next_response,Ref,Req,State=#state{xhr_cache=[],xhr_ref=undefined}) ->
-    %% Delay reply
-    {ok,Req,State#state{xhr_ref=Ref}};
-handle_call(next_response,Ref,Req,State=#state{xhr_cache=[],xhr_ref=OldRef}) ->
-    %% Had waiting xhr_poll request, cancel first one
-    ?gsreply(OldRef,{error,double_poll}),
-    %% Delay reply
-    {ok,Req,State#state{xhr_ref=Ref}};
-handle_call(next_response,Ref,Req,State=#state{xhr_cache=[Next|Rest],xhr_ref=undefined}) ->
-    ?gsreply(Ref,Next),
-    {ok,Req,State#state{xhr_cache=Rest}};
 handle_call(Other,Ref,Req,State) ->
     ?lwarn("Got request: ~p, when state is: ~p",[Other,?DUMP_REC(state,State)]),
     ?gsreply(Ref,{error,{bad_call,Other}}),
@@ -160,7 +135,6 @@ process_ws(Msg,Req,State=#state{chans=Chans,cfg=Cfg}) ->
     reply(ForMe,Req,State#state{chans=NewChans}).
 
 reply([], Req, State) -> {ok,Req,State,hibernate};
-reply(Msgs,Req,State=#state{xhr=true}) -> xhr_reply(Msgs,Req,State);
 reply(Msgs,Req,State) -> ws_reply(Msgs,Req,State).
 
 %% Single message in a list, don't queue
@@ -182,17 +156,3 @@ encode(Msg,binary) -> mmd_encode:encode(Msg);
 encode(Msg,text) -> okget:ok(json_encode:encode(Msg)).
 
 
-xhr_reply(Msgs,Req,State=#state{xhr_cache=Cache,xhr_ref=undefined}) ->
-    Append = case is_list(Msgs) of
-		 true -> Msgs;
-		 false -> [Msgs]
-	     end,
-    {ok,Req,State#state{xhr_cache=lists:append(Cache,Append)},hibernate};
-xhr_reply([H|Rest],Req,State=#state{type=Type,xhr_cache=Cache,xhr_ref=Ref}) ->
-    ?gsreply(Ref,{Type,H}),
-    {ok,Req,State#state{xhr_cache=lists:append(Cache,Rest),xhr_ref=undefined}};
-xhr_reply(Msg,Req,State=#state{type=Type,xhr_cache=[],xhr_ref=Ref}) ->
-    ?gsreply(Ref,{Type,Msg}),
-    {ok,Req,State#state{xhr_ref=undefined}}.
-
-    

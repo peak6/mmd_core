@@ -127,8 +127,8 @@ parse(Bin) ->
     end.
 
 %% Ignore on Env mismatch
-process(Ping=#ping{env=Env,node=Node},State=#state{env=MyEnv}) when Env =/= MyEnv -> 
-    ?linfo("Ignoring remote MMD node: ~p due to environment mismatch, theirs: ~p, mine: ~p",[Node,Env,MyEnv]),
+process(Ping=#ping{env=Env,node=_Node},State=#state{env=MyEnv}) when Env =/= MyEnv -> 
+%    ?linfo("Ignoring remote MMD node: ~p due to environment mismatch, theirs: ~p, mine: ~p",[Node,Env,MyEnv]),
     ignore(Ping,State);
 
 %% Ignore on cookie mismatch

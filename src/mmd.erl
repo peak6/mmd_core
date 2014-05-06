@@ -7,18 +7,15 @@
 start() ->
     application:start(mmd).
 
-add_tag(Tag) -> mmd_node_tags:add(Tag).
-get_tags() -> mmd_node_tags:get().
-del_tag(Tag) -> mmd_node_tags:remove(Tag).
+add_tag(Tag) -> mmd_node_tags:add_their_tags(Tag).
+get_tags() -> mmd_node_tags:get_their_tags().
+del_tag(Tag) -> mmd_node_tags:remove_their_tags(Tag).
 
 tag_string() ->
     string:join(lists:map(fun(T) -> binary_to_list(T) end, get_tags()),",").
 
 force_tag_string() ->
-    case application:get_env(mmd_core,force_tags) of
-	undefined -> "";
-	{ok,List} -> string:join(lists:map(fun(A) -> atom_to_list(A) end, List), ",")
-    end.
+    string:join(lists:map(fun(T) -> binary_to_list(T) end, mmd_node_tags:get_my_tags()),",").
 
 channels() ->
     client_channel_sup:getChannels().

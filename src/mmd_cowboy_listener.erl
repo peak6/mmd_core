@@ -9,7 +9,6 @@
 start_link(Port) ->
     application:start(mimetypes),
     application:start(cowboy),
-    p6dmap:new(?XHR_DMAP),
     Root =
 	case application:get_env(http_docroot) of
 	    {ok,R} when is_list(R) -> R;
@@ -29,7 +28,6 @@ start_link(Port) ->
 		       {[<<"_ws">>], mmd_cowboy_ws, Cfg},
 		       {[<<"call">>,'...'], mmd_cowboy_call,Cfg},
 		       {[<<"_call">>,'...'], mmd_cowboy_call,Cfg},
-		       {[<<"_xhr_poll">>,'...'], mmd_cowboy_xhr_poll,Cfg},
                        {[<<"_mmd_flags.js">>], mmd_web_flags,Cfg},
 		       {'_', mmd_cowboy_default, Cfg}
 		      ]

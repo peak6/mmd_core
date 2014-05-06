@@ -9,28 +9,28 @@
 
 -record(state, {known=sets:new(), chans=channel_mgr:new()}).
 
-default_tags() -> p6props:getApp(mmd_core,force_tags,[]).
+%% default_tags() -> p6props:getApp(mmd_core,force_tags,[]).
 
-get_tags(Tags) ->
-    Ret = case application:get_env(mmd_core,force_tags) of
-	      {ok,AppTags} -> merge_tags(AppTags,Tags);
-	      _ -> Tags
-	  end,
-    fix_tags(Ret).
+%% get_tags(Tags) ->
+%%     Ret = case application:get_env(mmd_core,force_tags) of
+%% 	      {ok,AppTags} -> merge_tags(AppTags,Tags);
+%% 	      _ -> Tags
+%% 	  end,
+%%     fix_tags(Ret).
 
-fix_tags(undefined) -> undefined;
-fix_tags(List) -> lists:usort(p6str:to_lower_list(List)).
+%% fix_tags(undefined) -> undefined;
+%% fix_tags(List) -> lists:usort(p6str:to_lower_list(List)).
 
-merge_tags(undefined,undefined) -> undefined;
-merge_tags(undefined,List) -> List;
-merge_tags(List,undefined) -> List;
-merge_tags(List1,List2) -> List1++List2.
+%% merge_tags(undefined,undefined) -> undefined;
+%% merge_tags(undefined,List) -> List;
+%% merge_tags(List,undefined) -> List;
+%% merge_tags(List1,List2) -> List1++List2.
 
 
-normalize(S=#service{tags=undefined}) -> normalize(S#service{tags=default_tags()});
+normalize(S=#service{tags=undefined}) -> normalize(S#service{tags=mmd_node_tags:get_my_tags()});
 normalize(S=#service{pid=undefined}) -> normalize(S#service{pid=self(),node=node()});
 normalize(S=#service{name=Name}) when is_atom(Name) -> normalize(S#service{name=p6str:to_lower_bin(Name)});
-normalize(S=#service{tags=Tags}) -> S#service{tags=fix_tags(Tags)}.
+normalize(S=#service{tags=Tags}) -> S#service{tags=mmd_node_tags:fix_tags(Tags)}.
 
 regGlobal(Service=#service{pid=Pid}) ->
     S = normalize(Service),
@@ -74,7 +74,7 @@ allServiceNames() ->
       lists:foldl(
 	fun
 	    ([_Node,Key,#service{tags=Val,version=?SERVICE_VERSION},_Owner],Keys) ->
-		case mmd_node_tags:has(Val) of
+		case mmd_node_tags:has_their_tags(Val) of
 		    true -> [Key|Keys];
 		    false -> Keys
 		end;
@@ -121,9 +121,9 @@ registerConfigured() ->
 
 
 init([]) ->
-    mmd_node_cost:start_link(),
-    mmd_node_tags:start_link(),
-    cpu_load:start_link(),
+    %% mmd_node_cost:start_link(),
+    %% mmd_node_tags:start_link(),
+    %% cpu_load:start_link(),
     p6dmap:ensure(?P6DMAP),
     regLocal(?MODULE),
     registerConfigured(),
@@ -275,7 +275,7 @@ filter_enabled(Services) ->
 
 filter_tags(Services) -> 
     lists:filter(fun(#service{node=Node}) when Node == node() -> true;
-		    (#service{tags=Tags}) -> mmd_node_tags:has(Tags) 
+		    (#service{tags=Tags}) -> mmd_node_tags:has_their_tags(Tags) 
 		 end, Services).
 
 decode_pattern(Data) ->
