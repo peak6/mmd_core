@@ -73,6 +73,8 @@ allServiceNames() ->
     lists:usort(
       lists:foldl(
 	fun
+	    ([_Node,Key,#service{node=N,version=?SERVICE_VERSION},_Owner],Keys) when N == node() ->
+		[Key|Keys];
 	    ([_Node,Key,#service{tags=Val,version=?SERVICE_VERSION},_Owner],Keys) ->
 		case mmd_node_tags:has_their_tags(Val) of
 		    true -> [Key|Keys];
