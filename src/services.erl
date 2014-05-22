@@ -27,6 +27,7 @@
 %% merge_tags(List1,List2) -> List1++List2.
 
 
+normalize(S=#service{app=undefined}) -> normalize(S#service{app= <<"mmd">>});
 normalize(S=#service{tags=undefined}) -> normalize(S#service{tags=mmd_node_tags:get_my_tags()});
 normalize(S=#service{pid=undefined}) -> normalize(S#service{pid=self(),node=node()});
 normalize(S=#service{name=Name}) when is_atom(Name) -> normalize(S#service{name=p6str:to_lower_bin(Name)});
