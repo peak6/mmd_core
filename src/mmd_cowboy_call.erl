@@ -11,7 +11,6 @@ handle(OrigReq,Cfg) ->
     %%    ?trace(Cfg,"Request: ~p",[?DUMP_REC(http_req,OrigReq)]),
     {Props,Req} = cowboy_http_req:qs_vals(OrigReq),
     {PathInfo,_} = cowboy_http_req:path_info(Req),
-    ?ldebug("PI: ~p",[PathInfo]),
     case PathInfo of 
 	[Svc] -> handle(p6str:to_lower_bin(Svc),<<"application/json">>,Props,Req,Cfg);
 	[Svc,File] -> handle(p6str:to_lower_bin(Svc),mimetypes:filename(File),Props,Req,Cfg);

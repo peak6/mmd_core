@@ -28,6 +28,7 @@
 -export([registerConnection/6]).
 -export([getConnections/0]).
 -export([clearConnections/0]).
+-export([name_of/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -55,6 +56,13 @@ getConnections() -> ets:tab2list(?TABLE).
 
 clearConnections() -> call(clearAll).
 
+name_of(Pid) when is_pid(Pid) ->
+    Q = #con_info{pid=Pid,impl='$1',_='_'},
+    case ets:match(?TABLE,Q) of
+	[] -> undefined;
+	[[Name]] -> Name
+    end.
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -72,7 +80,18 @@ handle_call({register,Pid,Type,Name,Port,Impl,Vsn},_From,State) ->
     ?linfo("Connected ~p: ~s (~p/~p, \"~s\", ~s)",
            [Type,Name,Pid,Port,Impl,Vsn]),
     Ref = erlang:monitor(process,Pid),
-    {reply,ets:insert_new(?TABLE,#con_info{ref=Ref,name=Name,pid=Pid,type=Type,port=Port,impl=Impl,vsn=Vsn}),State};
+    {reply,
+     ets:insert_new(?TABLE,#con_info{
+			      ref=Ref,
+			      name=Name,
+			      pid=Pid,
+			      start=os:timestamp(),
+			      type=Type,
+			      port=Port,
+			      impl=Impl,
+			      vsn=Vsn
+			     }),
+     State};
 
 handle_call(Request, From, State) ->
     ?lwarn("Unexpected handle_call(~p, ~p, ~p)",[Request,From,State]),

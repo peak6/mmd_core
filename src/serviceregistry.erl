@@ -88,7 +88,7 @@ mkreg(Originator,Name,Props) ->
     #service{pid=Originator,
 	     name=Name,
 	     node=node(Originator),
-	     app=p6str:to_lower_bin(p6props:get(<<"app">>,Props,<<"default">>)),
+	     app=p6str:to_lower_bin(p6props:get(<<"app">>,Props,p6str:mkbin(con_tracker:name_of(Originator)))),
 	     enabled=false_or_true(p6props:get(<<"enabled">>,Props)),
 	     tags=fix_tags(p6props:get(<<"tag">>,Props))
 	    }.
