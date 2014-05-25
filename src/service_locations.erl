@@ -23,6 +23,8 @@ init([]) ->
     services:regGlobal(?SERVICE),
     {ok,nostate}.
 
+handle_call({mmd,From,Msg=#channel_create{type=call,body=?raw(Bin)}},_From,State) ->
+    handle_call({mmd,From,Msg#channel_create{body=mmd_decode:decodeRawFull(Bin)}},_From,State);
 handle_call({mmd,From,Msg=#channel_create{type=call,body= <<"detail">>}},_From,State) ->
     UF = services:allServicesUnfiltered(),
     Ret = dict:to_list(lists:foldl(
@@ -35,7 +37,7 @@ handle_call({mmd,From,Msg=#channel_create{type=call,body= <<"detail">>}},_From,S
     mmd_msg:reply(From,Msg,?map(Ret)),
     {reply,ok,State};
 
-handle_call({mmd,From,Msg=#channel_create{type=call}},_From,State) ->
+handle_call({mmd,From,Msg=#channel_create{type=call,body=B}},_From,State) ->
     mmd_msg:reply(From,Msg,?map(services:service2Nodes())),
     {reply,ok,State};
 
