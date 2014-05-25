@@ -37,7 +37,7 @@ handle_call({mmd,From,Msg=#channel_create{type=call,body= <<"detail">>}},_From,S
     mmd_msg:reply(From,Msg,?map(Ret)),
     {reply,ok,State};
 
-handle_call({mmd,From,Msg=#channel_create{type=call,body=B}},_From,State) ->
+handle_call({mmd,From,Msg=#channel_create{type=call}},_From,State) ->
     mmd_msg:reply(From,Msg,?map(services:service2Nodes())),
     {reply,ok,State};
 
