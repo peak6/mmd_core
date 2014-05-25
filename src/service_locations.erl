@@ -23,6 +23,18 @@ init([]) ->
     services:regGlobal(?SERVICE),
     {ok,nostate}.
 
+handle_call({mmd,From,Msg=#channel_create{type=call,body= <<"detail">>}},_From,State) ->
+    UF = services:allServicesUnfiltered(),
+    Ret = dict:to_list(lists:foldl(
+			 fun(S=#service{name=Name},Dict) -> 
+				 {service,DR} = ?DUMP_REC(service,S),
+				 dict:append(Name,?map(DR),Dict) 
+			 end, 
+			 dict:new(), 
+			 UF)),
+    mmd_msg:reply(From,Msg,?map(Ret)),
+    {reply,ok,State};
+
 handle_call({mmd,From,Msg=#channel_create{type=call}},_From,State) ->
     mmd_msg:reply(From,Msg,?map(services:service2Nodes())),
     {reply,ok,State};

@@ -69,6 +69,9 @@ unregGlobal(Pid, Name) ->
 
 getDM() -> whereis(?P6DMAP).
 
+allServicesUnfiltered() ->
+    lists:map(fun([_,_,S,_]) -> S end, p6dmap:all(?P6DMAP)).
+
 allServiceNamesUnfiltered() -> p6dmap:uniqueKeys(?P6DMAP).
 allServiceNames() ->
     lists:usort(
@@ -94,11 +97,20 @@ ourLocalServices() -> p6dmap:getOurEntries(?P6DMAP,l).
 service2Nodes() ->
     dict:to_list(lists:foldl(fun([S,N],Dict) -> dict:append(S,N,Dict) end, dict:new(), p6dmap:keyToNodes(?P6DMAP))).
 
+find_like(Pattern) ->filter_like(Pattern,allServiceNames()).
+find_like_unfiltered(Pattern) ->  filter_like(Pattern,allServiceNamesUnfiltered()).
+
+filter_like(Pattern, Names) ->
+    case re:compile(p6str:mkbin(Pattern)) of
+	{ok,P} -> re_filter(P,Names);
+	Other -> Other
+    end.
+    
+    
 %% Returns list of DM,Pid,Val
 find(Name) -> filter_tags(filter_enabled(find_unfiltered(Name))).
 find_unfiltered(Name) -> 
     [ S || [_P,S=#service{version=?SERVICE_VERSION}] <- p6dmap:get(?P6DMAP,p6str:to_lower_bin(Name)) ].
-%%    lists:map(fun([_P,S=#service{version=?SERVICE_VERSION}]) -> S end, p6dmap:get(?P6DMAP,p6str:to_lower_bin(Name))).
 
 findBalanced(Name) -> findBalanced(Name,undefined).
 findBalanced(Name,ExcludePid) ->
