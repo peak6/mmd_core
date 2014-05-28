@@ -21,7 +21,8 @@
 encode(?raw(Bin)) -> encode(mmd_decode:decodeRawFull(Bin));
 
 encode(CM=#channel_message{body=?raw(Data)}) -> encode(CM#channel_message{body=mmd_decode:decodeRawFull(Data)});
-encode(CM=#channel_close{body=?raw(Data)}) -> encode(CM#channel_close{body=mmd_decode:decodeRawFull(Data)});
+encode(CM=#channel_close{body=?raw(Data)}) -> 
+    encode(CM#channel_close{body=mmd_decode:decodeRawFull(Data)});
     
 encode(#channel_message{id=Id,body=?map([{<<"json">>,JSON}])}) when is_binary(JSON) ->
     {ok,[${,<<"\"msg\"">>,$:,?QUOTE,uuidToStr(Id),?QUOTE,$,,<<"\"body\"">>,$:,JSON,$}]};

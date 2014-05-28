@@ -46,8 +46,9 @@ handle(Svc,MimeType,Props,Req,Cfg) ->
                         {ok,?error(Code,Text)} ->
 			    reply(500,[],p6str:mkio("Error Code: ~p\nError Message: ~s",[Code,p6str:mkstr(Text)]),Req,Cfg);
                         {ok,Result} ->
-                            case json_encode:encode(Result) of
-                                {ok,JSON} -> reply(200,[{<<"Content-Type">>,MimeType}],JSON,Req,Cfg);
+                            case encode_response(Result) of
+                                {ok,JSON} -> 
+				    reply(200,[{<<"Content-Type">>,MimeType}],JSON,Req,Cfg);
 				Other -> reply(500,[],p6str:mkio("Failed to encode response: ~p",[Other]),Req,Cfg)
                             end;
                         {error,timeout} -> reply(408,[],"Timeout",Req,Cfg);
@@ -56,6 +57,10 @@ handle(Svc,MimeType,Props,Req,Cfg) ->
                 Other -> reply(400,[],p6str:mkio("Bad Request: ~p",[Other]),Req,Cfg)
             end
     end.
+
+encode_response(?raw(RAW)) -> encode_response(mmd_decode:decodeRawFull(RAW));
+encode_response(?map([{<<"json">>,Body}]))-> {ok,Body};
+encode_response(Other) -> json_encode:encode(Other).
 
 terminate(_Req,_State) -> ok.
 
