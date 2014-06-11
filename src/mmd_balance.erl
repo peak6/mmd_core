@@ -6,7 +6,9 @@
 -define(MAX_LOAD,1000).
 
 
-weighted_random(Services) ->
+weighted_random([Service])->
+    Service;
+weighted_random(Services) ->   
     {Total,CS} = get_free(min_cost(Services)),
     find(random_service:uniform(Total),CS).
 
@@ -16,7 +18,8 @@ cheapest(Services) ->
 	{_,CS} -> element(2,hd(lists:sort(CS)))
     end.
 
-find(_Num,[]) -> undefined;
+find(_Num,[]) -> ?lerr("Cannot find in an empty list"),
+		 undefined;
 find(_Num,[{_,Last}]) -> Last;
 find(Num,[{Free,Svc}|_Services]) when Free >= Num -> Svc;
 find(Num,[{Free,_Svc}|Services]) -> find(Num-Free,Services).
