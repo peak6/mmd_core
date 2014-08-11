@@ -231,7 +231,7 @@ dispatch(Msg, State=#state{socket=Socket,sockName=SName,chans=Chans}) ->
 	    channel_mgr:close_all(Chans,?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,<<"Connection closed">>)),
 	    exit(normal);
 	{error,einval} ->
-	    ?ldebug("Socket: ~p was already closed, cannot dispatch: ~p",[SName,Msg]),	
+	    ?ldebug("Socket already closed, cannot write to: ~p",[SName]),	
 	    channel_mgr:close_all(Chans,?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,<<"Connection closed">>)),
 	    exit(normal);
         {error,Other} ->
