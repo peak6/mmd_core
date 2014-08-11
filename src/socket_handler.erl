@@ -226,10 +226,14 @@ dispatch(Msg, State=#state{socket=Socket,sockName=SName,chans=Chans}) ->
             ?lerr("Socket send timeout occured, exiting: ~p",[SName]),
             flush(),
             exit({socket_error,send_timeout});
-	    {error,closed} ->
-	        ?lwarn("Socket closed while writing to: ~p",[SName]),
-	        channel_mgr:close_all(Chans,?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,<<"Connection closed">>)),
-	        exit(normal);
+	{error,closed} ->
+	    ?lwarn("Socket closed while writing to: ~p",[SName]),
+	    channel_mgr:close_all(Chans,?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,<<"Connection closed">>)),
+	    exit(normal);
+	{error,einval} ->
+	    ?ldebug("Socket: ~p was already closed, cannot dispatch: ~p",[SName,Msg]),	
+	    channel_mgr:close_all(Chans,?error(?UNEXPECTED_REMOTE_CHANNEL_CLOSE,<<"Connection closed">>)),
+	    exit(normal);
         {error,Other} ->
             ?lerr("Error sending to socket, exiting.  ERROR: ~p",[Other]),
             flush(),
