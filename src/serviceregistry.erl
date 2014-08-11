@@ -75,6 +75,20 @@ do_action(register, Originator, Names, Props ) ->
 	Other -> ?error(?INVALID_REQUEST,Other)
     end;
 
+do_action(registerLocal, Originator, Names, Props ) ->
+    Results = lists:foldl(fun(Name,Acc) ->
+				  case services:regLocal(mkreg(Originator,Name,Props)) of
+				      ok -> Acc;
+				      Other -> [{Name,Other}|Acc]
+				  end
+			  end,
+			  [],
+			  Names),
+    case Results of
+	[] -> ok;
+	Other -> ?error(?INVALID_REQUEST,Other)
+    end;
+
 do_action(unregister, Originator, Names ,_Props) ->
     lists:foreach(fun (Name) ->
 			  services:unregGlobal(Originator, p6str:to_lower_bin(Name))
