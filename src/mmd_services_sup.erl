@@ -20,10 +20,6 @@
 -export([add_service/1, add_service/2]).
 -export([init/1]).
 
--import(p6_utils, [get_ts_millis/0]).
-
--record(start_time, {ts}).
-
 add_service(Mod) -> add_service(Mod,[Mod]).
 add_service(Mod,Names) ->
     supervisor:start_child(?MODULE,
@@ -43,7 +39,5 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    ets:new(startup_info, [set, named_table]),
-    ets:insert(startup_info, #start_time{ts=get_ts_millis() div 1000}),
     {ok, { {one_for_one, 5, 10}, [
                                  ]} }.

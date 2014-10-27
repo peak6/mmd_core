@@ -92,6 +92,7 @@ init([]) ->
 		%% ?CHILD(mmd_node_tags,worker),
                 %% ?CHILD(services,worker),
 		?CHILD(mmd_app_load,worker),
+		?CHILD(start_time,worker),
                 ?CHILD(service_locations,worker),
                 ?CHILD(create_tracker,worker),
                 ?CHILD(con_tracker,worker),
