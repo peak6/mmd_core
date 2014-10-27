@@ -26,7 +26,7 @@ service_call(Client,CC=#channel_create{}) ->
 			 end,
     
     reply(?map([{releaseLogContents, ReleaseLogContents},
-		{startTime, gen_server:call(start_time, '$get_start_time')},
+		{startTime, start_time:get()},
 		{allServicesHaveStarted, MMDStatus}])).
 
     
