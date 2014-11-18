@@ -149,7 +149,7 @@ gen_components(#htcfg{root=Root}) ->
 	lists:foldl( %% Each file
 	  fun(Entry,Objs) ->
 		  FullName = filename:join(Root,Entry),
-		  case file:read_link(filename:join(Root,Entry)) of
+		  case p6file:readLink(filename:join(Root,Entry)) of
 		      {ok,OrigPath} -> %% Is symlink
 			  Path = ensure_trailing_slash(OrigPath),
 			  Ent =
