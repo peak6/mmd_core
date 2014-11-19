@@ -39,6 +39,8 @@ start_link(Port) ->
 					   {recbuf,?megs(1)},
 					   {sndbuf,?megs(2)},
 					   {ip,mmd_bind:ip()}],
-					  [{env, [{dispatch,Dispatch}]}]
+					  [{env, [{dispatch,Dispatch}]},
+					   {compress, true}
+					  ]
 					 ).
 	
