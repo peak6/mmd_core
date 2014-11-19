@@ -2,22 +2,31 @@
 
 -include("mmd_cowboy_common.hrl").
 
--export([init/3, handle/2, terminate/2]).
+-export([init/2]).
 
-init({_Proto,http}, Req, Cfg) ->
-    {ok,Req,Cfg}.
+init(Req, Cfg) -> handle(Req,Cfg).
 
-handle(OrigReq,Cfg) ->
-    %%    ?trace(Cfg,"Request: ~p",[?DUMP_REC(http_req,OrigReq)]),
-    {Props,Req} = cowboy_http_req:qs_vals(OrigReq),
-    {PathInfo,_} = cowboy_http_req:path_info(Req),
-    case PathInfo of 
-	[Svc] -> handle(p6str:to_lower_bin(Svc),<<"application/json">>,Props,Req,Cfg);
-	[Svc,File] -> handle(p6str:to_lower_bin(Svc),mimetypes:filename(File),Props,Req,Cfg);
-	_ -> reply(404,[],"Bad request, must supply only a service and optionally a file name.  Example: /call/foo/bar.json",Req,Cfg)
-    end.
+mt(Fn) -> 
+	{A,B,_} = cow_mimetypes:all(Fn),
+	p6str:mkbin("~s/~s",[A,B]).
+	
+handle(Req,Cfg) ->
+	Props = cowboy_req:parse_qs(Req),
+	Svc = cowboy_req:binding(service,Req),
+	MT = case cowboy_req:binding(file,Req) of
+			 undefined -> <<"application/json">>;
+			 Fn -> mt(Fn)
+		 end,
+	handle(Svc,MT,Props,Req,Cfg).
+	
+    %% case PathInfo of 
+	%% 	[Svc] -> handle(p6str:to_lower_bin(Svc),<<"application/json">>,Props,Req,Cfg);
+	%% 	[Svc,File] -> handle(p6str:to_lower_bin(Svc),mimetypes:filename(File),Props,Req,Cfg);
+	%% 	_ -> reply(404,[],"Bad request, must supply only a service and optionally a file name.  Example: /call/foo/bar.json",Req,Cfg)
+    %% end.
 
 handle(Svc,MimeType,Props,Req,Cfg) ->
+	?ldebug("PROPS: ~p",[props]),
     CC = mkCreateChannel(Svc,Props),
     case p6props:has(<<"debug">>,Props) of
         true ->
@@ -25,31 +34,31 @@ handle(Svc,MimeType,Props,Req,Cfg) ->
                         #channel_create{} -> ?DUMP_REC(channel_create,CC);
                         Other -> Other
                     end,
-	    {Path,_} = ?get(raw_path,Req),
-	    {Args,_} = ?get(raw_qs,Req),
+			Path = cowboy_req:path(Req),
+			Args = cowboy_req:qs(Req),
 
-	    reply(200,[],p6str:mkio(
-			   "URI:~p\n"
-			   "Args: ~p\n"
-			   "Using Args: ~p\n"
-			   "Service: ~p\n"
-			   "ChannelCreate: ~p"
-				   ,[Path,Args,Props,Svc,CCStr]),Req,Cfg);
+			reply(200,[],p6str:mkio(
+						   "URI:~p\n"
+						   "Args: ~p\n"
+						   "Using Args: ~p\n"
+						   "Service: ~p\n"
+						   "ChannelCreate: ~p"
+								   ,[Path,Args,Props,Svc,CCStr]),Req,Cfg);
         false ->
             case CC of
                 #channel_create{} ->
                     CallResult = mmd_call:call(CC),
-		    ?trace(Cfg,"Call Results\n  Call: ~p\nResult: ~p",[?DUMP_REC(channel_create,CC),CallResult]),
+					?trace(Cfg,"Call Results\n  Call: ~p\nResult: ~p",[?DUMP_REC(channel_create,CC),CallResult]),
                     case CallResult of
                         {ok,?error(?SERVICE_NOT_FOUND,Text)} ->
-			    reply(404,[],p6str:mkio(Text),Req,Cfg);
+							reply(404,[],p6str:mkio(Text),Req,Cfg);
                         {ok,?error(Code,Text)} ->
-			    reply(500,[],p6str:mkio("Error Code: ~p\nError Message: ~s",[Code,p6str:mkstr(Text)]),Req,Cfg);
+							reply(500,[],p6str:mkio("Error Code: ~p\nError Message: ~s",[Code,p6str:mkstr(Text)]),Req,Cfg);
                         {ok,Result} ->
                             case encode_response(Result) of
                                 {ok,JSON} -> 
-				    reply(200,[{<<"Content-Type">>,MimeType}],JSON,Req,Cfg);
-				Other -> reply(500,[],p6str:mkio("Failed to encode response: ~p",[Other]),Req,Cfg)
+									reply(200,[{<<"Content-Type">>,MimeType}],JSON,Req,Cfg);
+								Other -> reply(500,[],p6str:mkio("Failed to encode response: ~p",[Other]),Req,Cfg)
                             end;
                         {error,timeout} -> reply(408,[],"Timeout",Req,Cfg);
                         Other -> reply(500,[],p6str:mkio("Call Error: ~p",[Other]),Req,Cfg)
@@ -61,8 +70,6 @@ handle(Svc,MimeType,Props,Req,Cfg) ->
 encode_response(?raw(RAW)) -> encode_response(mmd_decode:decodeRawFull(RAW));
 encode_response(?map([{<<"json">>,Body}]))-> {ok,Body};
 encode_response(Other) -> json_encode:encode(Other).
-
-terminate(_Req,_State) -> ok.
 
 mkCreateChannel(Svc,Props) ->
     Vals =
@@ -80,5 +87,5 @@ mkCreateChannel(Svc,Props) ->
     end.
 
 reply(RC,Headers,Body,Req,Cfg) ->
-    {ok,NewReq} = cowboy_http_req:reply(RC,Headers,Body,Req),
+    NewReq = cowboy_req:reply(RC,Headers,Body,Req),
     {ok,NewReq,Cfg}.

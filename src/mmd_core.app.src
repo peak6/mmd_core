@@ -10,7 +10,8 @@
                   stdlib,
                   inets,
                   crypto,
-                  p6core
+                  p6core,
+                  cowboy
                  ]},
   {mod, { mmd_core_app, []}},
   {env, [

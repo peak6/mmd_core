@@ -1,68 +1,36 @@
 -module(mmd_cowboy_ws).
--behaviour(cowboy_http_handler).
--behaviour(cowboy_http_websocket_handler).
--export([init/3, handle/2, terminate/2]).
--export([websocket_init/3, websocket_handle/3,
-	 websocket_info/3, websocket_terminate/3]).
+-export([init/2]).
+-export([websocket_handle/3, websocket_info/3, websocket_terminate/3]).
 
 -include("mmd_cowboy_common.hrl").
--record(state,{chans=channel_mgr:new(),trace=true,cfg=#mmd_cfg{},type=binary}).
+-record(state,{chans=channel_mgr:new(),trace=true,cfg=#mmd_cfg{}}).
 
 -define(DOWN,{'DOWN',_Ref,process,_Pid,_Reason}).
 
 -define(gsreply(Ref,Msg), gen_server:reply(Ref,Msg)).
 -define(trc(State,Msg,Args), case State#state.trace of
-				 true -> ?ldebug(Msg,Args);
-				 _ -> ok
-			     end).
+								 true -> ?ldebug(Msg,Args);
+								 _ -> ok
+							 end).
 
-init({_Any, http}, Req, _HttpCfg) ->
-    case cowboy_http_req:header('Upgrade', Req) of
-	{undefined, Req2} -> {ok, Req2, undefined};
-	{<<"websocket">>, _Req2} -> {upgrade, protocol, cowboy_http_websocket};
-	{<<"WebSocket">>, _Req2} -> {upgrade, protocol, cowboy_http_websocket}
-    end.
-
-handle(Req, State) ->
-    {Path,_Req} = cowboy_http_req:raw_path(Req),
-    {ok, Req2} = cowboy_http_req:reply(401,
-				       [],
-				       [<<"Access denied, '">>,Path,<<"' only supports WebSocket connections">>],
-				       Req),
-    {ok, Req2, State}.
-
-terminate(_Req, _State) ->
-    ok.
+init(Req,#htcfg{trace=Trace}) -> 
+	Peer = cowboy_req:peer(Req),
+	con_tracker:registerConnection(self(),websocket,format_addr(Peer),websocket,<<"websocket">>, json),
+	{ cowboy_websocket, Req, #state{trace=Trace} }.
 
 format_addr({IP,Port}) -> p6str:ip_port_to_str(IP,Port).
-
-is_set(true) -> true;
-is_set(<<"true">>) -> true;
-is_set(_Other) -> false.
-
-websocket_init(_Any, OReq, #htcfg{trace=Trace}) ->
-    {Props,Req} = cowboy_http_req:qs_vals(OReq),
-    RespType = case is_set(p6props:get(<<"binary">>,Props)) of
-		   false -> text;
-		   true -> binary
-	       end,
-    {ok,_Transport,Socket} = ?get(transport,Req), %% Not sure if this is a stable api
-    {Peer,_} = ?get(peer,Req),
-    con_tracker:registerConnection(self(),websocket,format_addr(Peer),Socket,<<"websocket">>, json),
-    Req2 = cowboy_http_req:compact(Req),
-    {ok, Req2, #state{type=RespType,trace=Trace}, hibernate}.
 
 websocket_handle({text, Data}, Req, State) ->
     ?trc(State,"Received(~p): ~p",[size(Data),Data]),
     case catch json_decode:decode(Data) of
-	{'EXIT',{Reason,Stack}} ->
-	    ?lerr("Error: ~p / ~p, processing: ~p",[Reason,Stack,Data]),
-	    {reply, {text, json:encode({obj,[{'_sock_error',p6str:mkio({Reason,Stack})}]})}, Req, State, hibernate};
-	Err = {error,_} ->
-	    ?lwarn("Received unparsable json text, error: ~p -- text: ~p",[Err,Data]),
-	    {reply,{text,json:encode({obj,[{'_sock_error',p6str:mkio(Err)}]})},Req,State,hibernate};
-	Msg ->
-	    process_ws(Msg,Req,State)
+		{'EXIT',{Reason,Stack}} ->
+			?lerr("Error: ~p / ~p, processing: ~p",[Reason,Stack,Data]),
+			{reply, {text, json:encode({obj,[{'_sock_error',p6str:mkio({Reason,Stack})}]})}, Req, State};
+		Err = {error,_} ->
+			?lwarn("Received unparsable json text, error: ~p -- text: ~p",[Err,Data]),
+			{reply,{text,json:encode({obj,[{'_sock_error',p6str:mkio(Err)}]})},Req,State};
+		Msg ->
+			process_ws(Msg,Req,State)
     end.
 
 %% Used for routing incoming MMD network messages back to websocket client
@@ -75,14 +43,13 @@ websocket_info({'$gen_call',Ref,Msg},Req,State) ->
     handle_call(Msg,Ref,Req,State);
 
 websocket_info(Down=?DOWN,Req,State=#state{chans=Chans}) ->
-    ?ldebug("Chans: ~p",[Chans]),
     case channel_mgr:process_down(Chans,Down) of
-	{ok,NewChans,Messages} ->
-	    reply(Messages,Req,State),
-	    {ok,Req,State#state{chans=NewChans}};
-	{error,Other} ->
-	    ?ldebug("proc down got: ~p",[Other]),
-	    {ok,Req,State,hibernate}
+		{ok,NewChans,Messages} ->
+			reply(Messages,Req,State),
+			{ok,Req,State#state{chans=NewChans}};
+		{error,Other} ->
+			?ldebug("proc down got: ~p",[Other]),
+			{ok,Req,State,hibernate}
     end;
 websocket_info({dispatch,Message},Req,State) ->
     ws_reply(Message,Req,State); %% {dispatch,Msg} messages are only used with websockets
@@ -107,12 +74,8 @@ handle_call(notrace,Ref,Req,State) ->
 handle_call(state,Ref,Req,State) ->
     ?gsreply(Ref,?DUMP_REC(state,State)),
     {ok,Req,State};
-handle_call(req,Ref,Req,State) ->
-    ?gsreply(Ref,?DUMP_REC(http_req,Req)),
-    {ok,Req,State};
 handle_call(socket,Ref,Req,State) ->
-    {ok,_Transport,Socket} = ?get(transport,Req),
-    ?gsreply(Ref,Socket),
+     ?gsreply(Ref,websocket),
     {ok,Req,State};
 handle_call(Other,Ref,Req,State) ->
     ?lwarn("Got request: ~p, when state is: ~p",[Other,?DUMP_REC(state,State)]),
@@ -148,11 +111,9 @@ ws_reply([Msg|Rest],Req,State) -> %% List 'o messages, dispatch 1 and queue rest
     ws_reply(Msg,Req,State);
 
 %%Single message
-ws_reply(Msg,Req,State=#state{type=Type}) ->
-    {reply,{Type,encode(Msg,Type)},Req,State,hibernate}.
+ws_reply(Msg,Req,State) ->
+    Res = {reply,{text,okget:ok(json_encode:encode(Msg))},Req,State},
+	Res.
 
-
-encode(Msg,binary) -> mmd_encode:encode(Msg);
-encode(Msg,text) -> okget:ok(json_encode:encode(Msg)).
 
 
