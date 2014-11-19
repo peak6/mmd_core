@@ -6,3 +6,4 @@ logs
 gproc*@*
 .eunit/
 doc/
+.rebar
