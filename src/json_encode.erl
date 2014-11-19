@@ -15,7 +15,6 @@
 
 -export([encode/1]).
 -include("mmd.hrl").
--include_lib("p6core/include/logger.hrl").
 -define( QUOTE, $" ).
 
 encode(?raw(Bin)) -> encode(mmd_decode:decodeRawFull(Bin));

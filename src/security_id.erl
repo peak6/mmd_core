@@ -6,7 +6,6 @@
 %%% Created : Mon May 2 2:25pm CDT 2011
 %%%-------------------------------------------------------------------
 -module(security_id).
--include_lib("p6core/include/p6core.hrl").
 
 -export([get_id/1, compute_id/1]).
 -export([get_key/1, compute_key/1]).

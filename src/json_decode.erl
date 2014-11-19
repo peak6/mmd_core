@@ -16,7 +16,6 @@
 -export([decode/1]).
 -export([decodeObj/1]).
 -export([parseTime/1]).
--include_lib("p6core/include/logger.hrl").
 
 -include("mmd.hrl").
 

@@ -9,7 +9,6 @@
 -define(SERVER,?MODULE).
 -define(SERVICE,'service.locations').
 
--include_lib("p6core/include/p6core.hrl").
 -include("mmd.hrl").
 
 %%%===================================================================

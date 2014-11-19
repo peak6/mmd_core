@@ -13,7 +13,6 @@
 %% limitations under the License.
 -module(mmd_decode).
 -include("mmd.hrl").
--include_lib("p6core/include/logger.hrl").
 
 -compile([export_all]).
 

@@ -47,7 +47,6 @@
 
 -behaviour(gen_server).
 
--include_lib("p6core/include/p6core.hrl").
 -include("mmd.hrl").
 
 -export([behaviour_info/1]).

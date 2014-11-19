@@ -17,7 +17,6 @@
 -export([init/1]).
 
 -define(SERVER, ?MODULE).
--include_lib("p6core/include/logger.hrl").
 -include("mmd.hrl").
 
 -define(DEFAULT_RESTART,permanent).

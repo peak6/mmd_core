@@ -22,7 +22,7 @@
 -define(PING_TIME,30000).  %Ping every 30 seconds
 -define(UPDATE_KNOWN,10000).
 
--include_lib("p6core/include/p6core.hrl").
+-include("p6core.hrl").
 
 -record(state, {known_nodes=[],ignore,node,env,cookie,version,sock,addr,port,ping}).
 -record(ping,{env,node,cookie,version}).

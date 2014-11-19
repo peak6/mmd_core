@@ -1,5 +1,4 @@
 -module(mmd_web_flags).
--include_lib("p6core/include/p6core.hrl").
 -include("mmd_cowboy_common.hrl").
 -export([flags/0]).
 -export([has/2]).

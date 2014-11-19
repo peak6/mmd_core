@@ -27,7 +27,7 @@
 -export([start_link/0]).
 -export([createHandler/1]).
 -export([getConnections/0]).
--include_lib("p6core/include/logger.hrl").
+-include("p6core.hrl").
 
 %% Supervisor callbacks
 -export([init/1]).

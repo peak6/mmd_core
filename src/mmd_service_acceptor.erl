@@ -27,8 +27,7 @@
 -compile(export_all).
 -endif.
 
--include_lib("p6core/include/p6core.hrl").
--include_lib("mmd_core/include/mmd.hrl").
+-include("mmd.hrl").
 
 -record(state, {created=0,mod,super}).
 %%-record(chan,{id,srv,cli,srvRef,cliRef}).

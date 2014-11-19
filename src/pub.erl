@@ -29,9 +29,7 @@
 
 -export([pub/2]).
 
--include_lib("p6core/include/logger.hrl").
 -include("mmd.hrl").
--include_lib("p6core/include/dmap.hrl").
 
 %%%===================================================================
 %%% API

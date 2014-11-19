@@ -21,7 +21,6 @@
 %%%-------------------------------------------------------------------
 -module(callall).
 
--include_lib("p6core/include/logger.hrl").
 -include("mmd.hrl").
 
 -export([service_call/2, service_subscribe/2]).

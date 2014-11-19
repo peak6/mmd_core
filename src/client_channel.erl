@@ -33,7 +33,6 @@
      terminate/2, code_change/3]).
 -export([prioritise_info/2]).
 
--include_lib("p6core/include/p6core.hrl").
 -include("mmd.hrl").
 -include("mmd_cfg.hrl").
 

@@ -21,7 +21,6 @@
 %%%-------------------------------------------------------------------
 -module(cluster_mmd_call).
 
--include_lib("p6core/include/p6core.hrl").
 -include("mmd.hrl").
 -export([call/4]).
 

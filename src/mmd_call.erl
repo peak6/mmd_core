@@ -1,7 +1,6 @@
 -module(mmd_call).
 -export([call/1,call/2,call/3,call/4]).
 -include("mmd.hrl").
--include_lib("p6core/include/p6core.hrl").
 
 -define(DOWN(Ref,Pid,Reason), {'DOWN',Ref,process,Pid,Reason}).
 

@@ -1,7 +1,7 @@
 -module(mmd_cfg).
 -include("mmd_cfg.hrl").
+-include("mmd.hrl").
 -export([new/1,update/2]).
--include_lib("p6core/include/p6core.hrl").
 
 new(Map) -> update(#mmd_cfg{},Map).
 

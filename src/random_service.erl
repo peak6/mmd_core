@@ -10,7 +10,6 @@
 -define(SERVER,?MODULE).
 
 
--include_lib("p6core/include/p6core.hrl").
 -include("mmd.hrl").
 
 uniform(Max) ->

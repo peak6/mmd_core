@@ -1,7 +1,6 @@
 -module(services).
--include_lib("p6core/include/p6core.hrl").
 -include("mmd.hrl").
--include_lib("p6core/include/dmap.hrl").
+-include("dmap.hrl").
 -compile([export_all]).
 
 -define(SERVER, ?MODULE).

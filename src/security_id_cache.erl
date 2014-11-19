@@ -16,8 +16,7 @@
 -define(ID_TO_KEY,security_id_to_key).
 -define(KEY_TO_ID,security_key_to_id).
 
--include_lib("p6core/include/p6core.hrl").
-
+-include("mmd.hrl").
 stats() -> call(stats).
 
 getById(SecId) ->

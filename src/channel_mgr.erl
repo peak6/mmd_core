@@ -13,7 +13,6 @@
 %% limitations under the License.
 -module(channel_mgr).
 -include("mmd.hrl").
--include_lib("p6core/include/logger.hrl").
 -export([new/0]).
 -export([handleExit/3, process_local/2, process_local/3, process_local/4]).
 -export([process_local_set_data/3, process_local_set_data/4]).

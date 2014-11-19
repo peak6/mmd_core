@@ -1,4 +1,4 @@
--include_lib("p6core/include/p6core.hrl").
+-include("p6core.hrl").
 
 -define(SERVICE_VERSION,1).
 -record(service,{node,name,app,enabled=true,tags,pid,version=?SERVICE_VERSION}).

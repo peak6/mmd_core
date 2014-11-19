@@ -22,8 +22,6 @@
 -export([getBody/1]).
 -export([notSupported/2]).
 
--include_lib("p6core/include/logger.hrl").
-
 getBody(#channel_create{body=Body}) -> Body;
 getBody(#channel_message{body=Body}) -> Body;
 getBody(#channel_close{body=Body}) -> Body.

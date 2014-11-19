@@ -31,7 +31,7 @@
 
 -compile({no_auto_import,[get/0]}).
 
--include_lib("p6core/include/logger.hrl").
+-include("logger.hrl").
 
 -define(SERVER, ?MODULE).
 -define(TABLE,?SERVER).

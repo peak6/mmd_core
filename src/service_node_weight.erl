@@ -15,7 +15,7 @@
 -compile(export_all).
 -endif.
 
--include_lib("p6core/include/p6core.hrl").
+-include("mmd.hrl").
 
 -define(SERVER, ?MODULE).
 -define(TABLE,node2weight).

@@ -4,7 +4,6 @@
 -behaviour(gen_server).
 
 -include("mmd.hrl").
--include_lib("p6core/include/p6core.hrl").
 
 -export([start_link/0]).
 -export([get/0]).
