@@ -33,4 +33,5 @@ getPaths(Base) ->
     Prefix ++ filelib:wildcard("deps/*/"++Base)++filelib:wildcard("lib/*/"++Base).
 
 start() ->
+	application:load(mmd_core),
     p6init_args:process_args(#env{},init:get_arguments()).
