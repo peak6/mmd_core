@@ -1,0 +1,422 @@
+#!/usr/bin/env python
+import os
+import copy
+import string
+import subprocess
+import signal
+import sys
+import socket
+import re
+import time
+from datetime import datetime
+from optparse import OptionParser
+
+
+basedir = os.path.realpath(sys.path[0])
+os.chdir(basedir)
+
+latestdir = os.pardir + "/latest"
+
+
+(_,version) = os.path.split(os.path.realpath(sys.path[0]))
+
+valid_args = ["start","debug","restart","stop","kill","connect","status",
+              "upstart"]
+
+usage = "%prog [options] <"+string.join(valid_args,"|")+"""> [CONNECT_ARG]
+
+   start : Starts in background mode
+   debug : Starts in foreground mode
+ restart : Same thing as %proc stop start
+    stop : Stops erlang with SIGTERM signal
+    kill : Stops erlang with SIGKILL signal
+ connect : Connect to a running node"
+  status : Check to see if erlang is running"""
+
+parser = OptionParser(usage=usage)
+
+parser.add_option("-a", "--appname",
+                  help="Application Name")
+
+parser.add_option("--appcfg",
+                  help="Sets erlang application variable.  Expects arguments APP KEY VAL.  Example: '--appcfg mmd_core somekey someval' becomes '-mmd_core somekey someval' on the erlang command line",
+                  dest="appcfg", default=[], action="append", nargs=3)
+
+parser.add_option("-b", "--bind",
+                  help="bind address for listeners (hostname or ip addr)",
+                  dest="bind")
+
+parser.add_option("-c", "--config",
+                  help="p6init config file",
+                  dest="config", default=[], action="append")
+
+parser.add_option("-C", "--scontrol-config",
+                  help="scontrol configuration file",
+                  dest="sconfigs", default=[], action="append")
+
+parser.add_option("--cookie",
+                  help="Erlang cookie (implied from APP+ENV)",
+                  dest="cookie")
+
+parser.add_option("-e", "--env",
+                  help="Environment (dev,prod,staging,uat,automation)",
+                  dest="env", type="choice",choices=["dev","prod","staging","uat","automation"])
+
+parser.add_option("--no-force-tags", 
+                  help="No force tags, overrides tags passed with -f",
+                  action="store_true", dest="noForceTags", default=False)
+
+parser.add_option("-l", "--logdir",
+                  help="Log directory (for APP.log and APP.pid)",
+                  dest="logdir")
+
+parser.add_option("-L",
+                  help="Erlang library path (can have multiples)",
+                  dest="lib", default=[], action="append")
+
+parser.add_option("--longname",
+                  help="Use erlang long name syntax (-name) vs short name (-sname)",
+                  dest="longname",  action="store_true")
+
+parser.add_option("--max-erl-procs",
+                  help="Maximum number of erlang processes, default ~16M",
+                  dest="max_erl_procs", action="store", type=int)
+
+parser.add_option("-n", "--node",
+                  help="Node name for this node [start|restart|debug] or target node [connect].  Defaults to APP_ENV",
+                  dest="node")
+
+parser.add_option("--mtag",
+                  help="Set 'my tags', tags that are set by default on a service when it doesn't specify it's own tags",
+                  dest="my_tags")
+
+parser.add_option("--ttag",
+                  help="Set 'their tags', tags that we use to check to see if we can call another node's services",
+                  dest="their_tags")
+
+parser.add_option("--webroot",
+                  help="Set web root to something other than ~/webroot",
+                  dest="webroot")
+
+parser.add_option("--test",
+                  help="Test configuration, just print cmd line",
+                  dest="test", default=False, action="store_true")
+
+parser.add_option("-v",
+                  help="Verbose (start/stop)",
+                  dest="verbose",default=False,action="store_true")
+
+(options,args) = parser.parse_args()
+
+erlenv = None
+erlopts = []
+
+def find_file(file):
+    base_dirs=['.','deps/mmd_prop','deps/mmd_core']
+    for base in base_dirs:
+        for dir in [".","priv"]:
+            fn = os.path.join(base, dir, file)
+            if os.path.isfile(fn):
+                return fn
+    return None
+
+def try_load(file):
+    fn = find_file(file)
+    if fn:
+        if options.verbose:
+            print "Loading:", fn
+        execfile(fn)
+
+if options.sconfigs == [] :
+    options.sconfigs = ["scontrol.conf"]
+
+        
+for sc in options.sconfigs:
+    try_load(sc)
+
+if not options.appname:
+    options.appname='mmd'
+
+if not options.webroot:
+    p = os.path.expanduser("~/webroot")
+    if os.path.exists(p):
+        erlopts.extend(["-mmd_core","http_docroot",'"'+p+'"'])
+
+    
+if not options.env:
+    parser.print_help()
+    print "\nENV not specified"
+    exit(1)
+
+hostname = socket.gethostname()
+
+#mmd_major = subprocess.check_output("./mmd_version").strip()
+mmd_major = "5"
+
+defaultCookie = options.appname+"_"+options.env+"_"+mmd_major
+defaultNode = options.appname+"_"+options.env
+if options.max_erl_procs:
+    erlopts.extend(["+P", str(options.max_erl_procs)])
+
+if not hostname[0] in ["p", "a"]:
+    defaultNode = hostname[0] + defaultNode
+    defaultCookie = hostname[0] + defaultCookie
+
+if not options.node:
+    options.node = defaultNode
+
+if not options.cookie:
+    options.cookie = defaultCookie
+
+if not erlenv:
+    erlenv = copy.copy(os.environ)
+
+if not options.logdir:
+    options.logdir = os.path.expanduser("/plogs/"+options.appname)
+
+if not options.lib:
+    for dir in ["lib","deps","."]:
+        if os.path.exists(dir):
+            options.lib.append(dir)
+
+if not options.config:
+    fn = options.appname+".cfg"
+    f = find_file(fn)
+    if f:
+        options.config.append(f)
+    else:
+        parser.print_help()
+        print "\nCONFIG not specified and I couldn't locate:",fn
+        exit(1)
+
+if options.node:
+    if options.longname:
+        erlopts = ["-name",options.node] + erlopts
+    else:
+        erlopts = ["-sname",options.node] + erlopts
+
+def str2list(txt):
+    return filter(lambda x: x, txt.split(','))
+
+def dataCenter():
+    return re.sub(r"^...(....).*$","\\1",socket.gethostname())
+
+# Tags is to allow you to see other node's services that are tagged with a subset of the list supplied here
+if options.their_tags:
+    erlopts = ["-mmd_core","their_tags",str(str2list(options.their_tags))]+erlopts
+
+# Default tags to apply to a service that doesn't tag itself (ie: all services currently)
+if options.my_tags:
+    erlopts = ["-mmd_core","my_tags",str(str2list(options.my_tags))]+erlopts
+
+if options.bind:
+    erlopts = ["-mmd_core","bind","'"+options.bind+"'"] + erlopts
+
+display_name = options.node
+
+
+def checkLogDir(logdir):
+    if not os.path.exists(logdir):
+        print "Creating log directory: "+logdir
+        os.makedirs(logdir)
+
+    if not os.access(logdir,os.W_OK):
+        print "Error: Can't write to: "+logdir
+        exit(1)
+    if not os.access(logdir,os.R_OK):
+        print "Error: Can't read from: "+logdir
+        exit(1)
+
+
+checkLogDir(options.logdir)
+
+pidfile = options.logdir+"/"+display_name+".pid"
+runfile = options.logdir+"/"+display_name+".run"
+
+erlopts.extend(["-mmd_core","log_dir",'"'+options.logdir+'"'])
+
+erlopts.extend(["-env","version",version])
+
+erlopts.extend(['+K','true','+A','24'])
+
+for lib in options.lib:
+    if os.path.exists(lib):
+        for f in os.listdir(lib):
+            if os.path.exists(lib + "/ebin"):
+                erlopts.extend(['-pa', lib + "/ebin"])
+            filename = lib+"/"+f+"/ebin"
+            if os.path.exists(filename):
+                erlopts.extend(['-pa',filename])
+
+
+if not args:
+    parser.print_help()
+    print "\nNo arguments specified"
+    exit(1)
+
+for arg in args:
+    if not arg in valid_args:
+        parser.print_help()
+        print "\nInvalid argument: " + arg
+        exit(1)
+
+def ignore(sig,frame):
+    return None
+
+def get_current_pid():
+    if os.path.isfile(pidfile):
+        with open(pidfile) as f:
+            pid = int(f.read())
+            try:
+                os.kill(pid,0)
+                return pid
+            except:
+                return None
+    return None
+
+def ensure_not_started():
+    if get_current_pid():
+        print "Existing pid file found at:",pidfile
+        exit(1)
+
+
+def run_erl(daemon=False, use_exec=False):
+    if use_exec:
+        with open(pidfile,"w") as f:
+            f.write(str(os.getpid()))
+        os.execvpe("erl", ["erl"] + erlopts, env=erlenv)
+    else:
+        proc = subprocess.Popen(["erl"] + erlopts,env=erlenv)
+        signal.signal(signal.SIGINT,ignore)
+        with open(pidfile,"w") as f:
+            f.write(str(proc.pid))
+        res = proc.wait()
+        if not daemon:
+            subprocess.call(["stty","sane"])
+        print
+        if options.verbose:
+            print "Erlang exited with:",res
+        os.remove(pidfile)
+        exit(res)
+
+def start_erl(daemon=False, use_exec=False):
+    ensure_not_started()
+    if options.env != 'dev':
+        if os.path.exists(latestdir):
+            os.unlink(latestdir)
+        os.symlink(basedir, latestdir)
+
+    erlopts.extend(['-setcookie',options.cookie])
+    for c in options.config:
+        erlopts.extend(["-p6cfg",c])
+
+    for (a,k,v) in options.appcfg:
+        erlopts.extend(["-"+a,k,v])
+
+    erlopts.extend(["-p6env",options.env])
+
+    if daemon:
+        erlopts.extend(["-mmd_core","log_tty","false"])
+        erlopts.append("-noshell")
+
+    if options.test:
+        print "erl "+string.join(erlopts)
+        exit(0)
+    else:
+        if options.verbose:
+            print "Starting: erl "+string.join(erlopts)
+        if daemon:
+            if not use_exec:
+                pid = os.fork()
+                if pid:
+                    print "Started, process:",pid
+                    print "Check for stdout/stderr in:",runfile
+                    return
+            f = file(runfile,'a+',0)
+            dn = file("/dev/null",'r')
+            os.dup2(f.fileno(), sys.stdout.fileno())
+            os.dup2(f.fileno(), sys.stderr.fileno())
+            os.dup2(dn.fileno(), sys.stdin.fileno())
+            print "\n\n**STARTING",str(datetime.now())+"**\n"
+            sys.stdout.flush()
+            run_erl(True, use_exec)
+        else:
+            run_erl()
+
+def stop_erl(signal=signal.SIGTERM):
+    pid = get_current_pid()
+    if pid:
+        print "Stopping process:",pid,"with signal:",signal
+        os.kill(pid,signal)
+
+        # Wait for the process to exit.
+        while get_current_pid():
+            print "waiting..."
+            time.sleep(1)
+        if os.path.exists(pidfile):
+            os.remove(pidfile)
+    else:
+        print "Not running"
+    exit(0)
+
+for arg in args:
+    if arg == "test":
+        print erlopts
+
+    elif arg == "start":
+        if options.verbose:
+            print "Starting..."
+        erlopts.extend(["-s","p6init"])
+        start_erl(daemon=True)
+
+    elif arg == "upstart":
+        if options.verbose:
+            print "Starting (upstart)..."
+        erlopts.extend(["-s","p6init"])
+        start_erl(daemon=True, use_exec=True)
+
+    elif arg == "debug":
+        if options.verbose:
+            print "Debugging..."
+        erlopts.extend(["-mmd_core","log_console","true"])
+        erlopts.extend(["-s","p6init"])
+        start_erl()
+
+    elif arg == "kill":
+        stop_erl(signal.SIGKILL)
+
+    elif arg == "stop":
+        stop_erl()
+
+    elif arg == "restart":
+        if options.verbose:
+            print "Restarting..."
+        stop_erl()
+        start_erl()
+
+    elif arg == "status":
+        p = get_current_pid()
+        if p:
+            print display_name,"running, pid:",p
+        else:
+            print display_name,"not running"
+
+    elif arg == "connect":
+        erlopts.extend(["-remsh",args.pop()])
+        targetNode = options.node
+        if "@" in targetNode:
+            baseNode = re.sub(r'(.*?)@.*',r'\1',targetNode)
+        else:
+            baseNode = targetNode
+            targetNode = targetNode+'@'+socket.gethostname()
+
+        myNode =  "%s_%s_%d" % (baseNode,os.getenv("USER"),os.getpid())
+
+        opts = ["erl","-remsh",targetNode,"-sname",myNode,"-setcookie",options.cookie,'-hidden']
+        print "Connecting to:",targetNode,"as hidden node:",myNode
+        if options.test:
+            print string.join(opts," ")
+            exit(0)
+        else:
+            os.execvp("erl",opts)
+
