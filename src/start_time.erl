@@ -21,7 +21,7 @@ start_link() ->
     gen_server:start_link({local,?SERVER},?MODULE,[],[]).
 
 init([]) ->
-    {ok,p6_utils:get_ts_millis() div 1000}.
+    {ok,p6time:nowAs(sec)}.
 
 
 handle_call(get, _From, State) ->
