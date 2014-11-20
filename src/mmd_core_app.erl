@@ -52,7 +52,6 @@ start(_StartType, _StartArgs) ->
 %% @end
 %%--------------------------------------------------------------------
 stop(_State) ->
-    ?lwarn("Shutting down..."),
     init:stop(?EXIT_ERROR),
     ok.
 

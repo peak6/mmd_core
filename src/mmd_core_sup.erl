@@ -64,35 +64,36 @@ init([]) ->
     MaxSecondsBetweenRestarts = 5,
 
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
-    
+
     Http = case application:get_env(http_port) of
                undefined -> [];
                {ok,Port} -> [?CHILD(mmd_cowboy_listener,[Port],worker)]
            end,
     MmdTcpClientSpecs = case application:get_env(mmd_tcp_clients) of
-			    undefined ->
-				[];
-			    {ok, Configs} ->
-				lists:map(fun mmd_tcp_client_child/1, Configs)
-			end,
+							undefined ->
+								[];
+							{ok, Configs} ->
+								lists:map(fun mmd_tcp_client_child/1, Configs)
+						end,
     ProxySpecs = case application:get_env(proxies) of
-		     undefined ->
-			 [];
-		     {ok, Cfgs} ->
-			 lists:map(fun proxy_child/1, Cfgs)
-		 end,
+					 undefined ->
+						 [];
+					 {ok, Cfgs} ->
+						 lists:map(fun proxy_child/1, Cfgs)
+				 end,
     Children = [
+				?CHILD(p6core_sup,supervisor),
                 ?CHILD(security_id_cache,worker),
                 ?CHILD(random_service,worker),
                 ?CHILD(client_channel_sup,supervisor),
-		?CHILD(mmd_services_sup,supervisor),
-		?CHILD(svcmgr_sup,supervisor),
-		%% ?CHILD(cpu_load,worker),
-		%% ?CHILD(mmd_node_cost,worker),
-		%% ?CHILD(mmd_node_tags,worker),
+				?CHILD(mmd_services_sup,supervisor),
+				?CHILD(svcmgr_sup,supervisor),
+				%% ?CHILD(cpu_load,worker),
+				%% ?CHILD(mmd_node_cost,worker),
+				%% ?CHILD(mmd_node_tags,worker),
                 %% ?CHILD(services,worker),
-		?CHILD(mmd_app_load,worker),
-		?CHILD(start_time,worker),
+				?CHILD(mmd_app_load,worker),
+				?CHILD(start_time,worker),
                 ?CHILD(service_locations,worker),
                 ?CHILD(create_tracker,worker),
                 ?CHILD(con_tracker,worker),
