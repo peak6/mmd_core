@@ -139,8 +139,8 @@ if not options.appname:
 
 if not options.webroot:
     p = os.path.expanduser("~/webroot")
-    if os.path.exists(p):
-        erlopts.extend(["-mmd_core","http_docroot",'"'+p+'"'])
+#    if os.path.exists(p):
+    erlopts.extend(["-mmd_core","http_docroot",'"'+p+'"'])
 
     
 if not options.env:
@@ -150,17 +150,12 @@ if not options.env:
 
 hostname = socket.gethostname()
 
-#mmd_major = subprocess.check_output("./mmd_version").strip()
 mmd_major = "5"
 
 defaultCookie = options.appname+"_"+options.env+"_"+mmd_major
 defaultNode = options.appname+"_"+options.env
 if options.max_erl_procs:
     erlopts.extend(["+P", str(options.max_erl_procs)])
-
-if not hostname[0] in ["p", "a"]:
-    defaultNode = hostname[0] + defaultNode
-    defaultCookie = hostname[0] + defaultCookie
 
 if not options.node:
     options.node = defaultNode
@@ -172,7 +167,7 @@ if not erlenv:
     erlenv = copy.copy(os.environ)
 
 if not options.logdir:
-    options.logdir = os.path.expanduser("/plogs/"+options.appname)
+    options.logdir = os.path.expanduser("./logs/"+options.appname)
 
 if not options.lib:
     for dir in ["lib","deps","."]:
